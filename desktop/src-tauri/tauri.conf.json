@@ -25,12 +25,22 @@
     ],
     "macOSPrivateApi": true,
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app", "nsis", "deb", "appimage"],
+    "targets": [
+      "dmg",
+      "app",
+      "nsis",
+      "deb",
+      "appimage"
+    ],
     "resources": {
       "resources/plugin/manifest.json": "plugin/manifest.json",
       "resources/plugin/main.js": "plugin/main.js",

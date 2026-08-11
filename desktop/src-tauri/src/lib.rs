@@ -141,7 +141,6 @@ pub fn run() {
             commands::gh_sign_out,
             commands::activity_get,
             commands::activity_scan,
-            commands::activity_share,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

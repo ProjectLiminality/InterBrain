@@ -800,3 +800,20 @@ input:focus, select:focus {
   cursor: pointer;
   user-select: text;
 }
+
+/* Text button — like footer buttons but inline/auto-width (e.g. "+ Add vault",
+   picker "Add" actions). icon-btn is a fixed 26px square and clips text. */
+.text-btn {
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-white);
+  padding: 5px 12px;
+  font-family: var(--ib-font);
+  font-size: 12.5px;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.text-btn:hover:not(:disabled) { border-color: var(--ib-blue); color: var(--ib-blue); }
+.text-btn:disabled { opacity: 0.5; cursor: default; }

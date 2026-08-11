@@ -23,7 +23,7 @@ path = "src/bin/git_remote_interbrain.rs"
 tauri-build = { version = "2.4", features = [] }
 
 [dependencies]
-tauri = { version = "2.11", features = ["tray-icon", "image-png", "macos-private-api", "devtools"] }
+tauri = { version = "2.11", features = ["tray-icon", "image-png", "macos-private-api", "devtools", "protocol-asset"] }
 tauri-plugin-dialog = "2.7"
 tauri-plugin-fs = "2.5"
 tauri-plugin-shell = "2.3"

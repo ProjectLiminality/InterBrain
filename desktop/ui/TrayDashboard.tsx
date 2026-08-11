@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 
 interface VaultEntry {
   path: string;
@@ -41,25 +41,31 @@ const CODING_AGENT_PRESETS: { label: string; command: string }[] = [
   { label: 'Custom…', command: 'CUSTOM' },
 ];
 
-interface ActivityEntry {
+interface IncomingEntry {
   vaultPath: string;
+  vaultName: string;
   dreamnodePath: string;
   dreamnodeUuid: string;
   dreamnodeName: string;
-  peerName: string;
-  commitsAhead: number;
+  nodeType: string;
+  dreamTalkPath: string | null;
+  totalCommits: number;
+  peers: string[];
 }
 
 interface OutboxEntry {
   vaultPath: string;
+  vaultName: string;
   dreamnodePath: string;
   dreamnodeUuid: string;
   dreamnodeName: string;
+  nodeType: string;
+  dreamTalkPath: string | null;
   commitsUnpushed: number;
 }
 
 interface ActivityScanResult {
-  incoming: ActivityEntry[];
+  incoming: IncomingEntry[];
   outgoing: OutboxEntry[];
   scannedAtMs: number;
 }
@@ -120,13 +126,17 @@ export function TrayDashboard() {
     }
   }
 
-  async function shareNode(dreamnodePath: string) {
+  // Deep-link into Obsidian: open the right vault, select the DreamNode,
+  // and pop the appropriate modal (Check-for-Updates / Share-Changes).
+  // The dashboard itself never acts — it's an overview + shortcut.
+  async function openActivityEntry(vaultName: string, uuid: string, mode: 'inbox' | 'outbox') {
+    const url =
+      `obsidian://interbrain-activity?vault=${encodeURIComponent(vaultName)}` +
+      `&uuid=${encodeURIComponent(uuid)}&mode=${mode}`;
     try {
-      await invoke('activity_share', { dreamnodePath });
-      const a = await invoke<ActivityScanResult | null>('activity_get');
-      setActivity(a);
+      await invoke('open_external_url', { url });
     } catch (err) {
-      console.error('share failed', err);
+      console.error('open activity entry failed', err);
     }
   }
 
@@ -264,7 +274,7 @@ export function TrayDashboard() {
 
           {/* Add a vault without going through the full Setup flow. */}
           <div style={{ padding: '6px 10px' }}>
-            <button className="icon-btn" onClick={toggleAddVault} title="Install InterBrain into another Obsidian vault">
+            <button className="text-btn" onClick={toggleAddVault} title="Install InterBrain into another Obsidian vault">
               {addingVault ? '× Cancel' : '+ Add vault'}
             </button>
           </div>
@@ -293,7 +303,7 @@ export function TrayDashboard() {
                       <div className="vault-name" title={p}>{name}</div>
                       <div className="vault-actions">
                         <button
-                          className="icon-btn"
+                          className="text-btn"
                           disabled={installingVault !== null}
                           onClick={() => addVault(p)}
                           title={`Install InterBrain into ${p}`}
@@ -320,7 +330,7 @@ export function TrayDashboard() {
           activity={activity}
           scanning={scanning}
           onScan={scanActivityNow}
-          onShare={shareNode}
+          onOpen={openActivityEntry}
         />
       )}
 
@@ -345,16 +355,60 @@ interface ActivityPaneProps {
   activity: ActivityScanResult | null;
   scanning: boolean;
   onScan: () => void;
-  onShare: (dreamnodePath: string) => void;
+  onOpen: (vaultName: string, uuid: string, mode: 'inbox' | 'outbox') => void;
 }
 
 /**
- * Activity feed (#393): the global lens on what flows in and out across all
- * vaults. Incoming = peer commits pending per DreamNode; Unshared = your
- * committed-but-unpushed work, publishable via [Share]. Rows reuse the
- * vault-list styling so the tab reads like the Vaults pane.
+ * Mini DreamNode: the node exactly as it looks in the DreamSpace, in
+ * miniature — circular DreamTalk thumbnail on black, ringed blue for
+ * dreams / red for dreamers. Images stream over the Tauri asset protocol
+ * (no base64 round-trips); non-image media and empty nodes fall back to
+ * a plain ringed circle. Colors mirror dreamNodeStyles in the plugin.
  */
-function ActivityPane({ activity, scanning, onScan, onShare }: ActivityPaneProps) {
+function MiniNode({ nodeType, dreamTalkPath, name }: { nodeType: string; dreamTalkPath: string | null; name: string }) {
+  const ring = nodeType === 'dreamer' ? '#FF6B6B' : '#479FF8';
+  const ext = dreamTalkPath?.split('.').pop()?.toLowerCase() ?? '';
+  const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+  const size = 34;
+  const base: React.CSSProperties = {
+    width: size,
+    height: size,
+    borderRadius: '50%',
+    border: `2px solid ${ring}`,
+    background: '#000',
+    flexShrink: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+  if (dreamTalkPath && isImage) {
+    return (
+      <div style={base}>
+        <img
+          src={convertFileSrc(dreamTalkPath)}
+          alt=""
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div style={{ ...base, color: 'var(--ib-text-muted)', fontSize: 13 }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+/**
+ * Activity feed (#393): a pure overview of what flows in and out across all
+ * vaults — one aggregated row per DreamNode. Rows carry no actions; clicking
+ * deep-links into Obsidian where the node is selected and the appropriate
+ * modal opens (Check-for-Updates for incoming, Share-Changes for unshared).
+ */
+function ActivityPane({ activity, scanning, onScan, onOpen }: ActivityPaneProps) {
   const muted = { color: 'var(--ib-text-muted)', fontSize: 13, padding: '8px 10px' } as const;
   const sectionLabel = {
     color: 'var(--ib-text-muted)',
@@ -362,6 +416,17 @@ function ActivityPane({ activity, scanning, onScan, onShare }: ActivityPaneProps
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
     padding: '10px 10px 4px',
+  };
+  const countChip: React.CSSProperties = {
+    color: 'var(--ib-text-muted)',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    border: '1px solid var(--ib-border, rgba(255,255,255,0.18))',
+    borderRadius: 6,
+    padding: '3px 8px',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   };
 
   return (
@@ -388,11 +453,17 @@ function ActivityPane({ activity, scanning, onScan, onShare }: ActivityPaneProps
           <div style={sectionLabel}>Incoming</div>
           {activity.incoming.length === 0 && <div style={muted}>Nothing new from your peers.</div>}
           {activity.incoming.map(e => (
-            <div key={`${e.dreamnodePath}:${e.peerName}`} className="vault-row">
-              <div className="vault-name" title={e.dreamnodePath}>{e.dreamnodeName}</div>
-              <div className="vault-mode" title={`from ${e.peerName}`}>@{e.peerName}</div>
-              <div className="vault-actions" style={{ color: 'var(--ib-text-muted)', fontSize: 12 }}>
-                {e.commitsAhead} new
+            <div
+              key={e.dreamnodePath}
+              className="vault-row"
+              style={{ cursor: 'pointer', gap: 10 }}
+              onClick={() => onOpen(e.vaultName, e.dreamnodeUuid, 'inbox')}
+              title={`Review incoming commits for ${e.dreamnodeName} (${e.peers.map(p => '@' + p).join(', ')})`}
+            >
+              <MiniNode nodeType={e.nodeType} dreamTalkPath={e.dreamTalkPath} name={e.dreamnodeName} />
+              <div className="vault-name">{e.dreamnodeName}</div>
+              <div style={countChip}>
+                {e.totalCommits} commit{e.totalCommits === 1 ? '' : 's'}
               </div>
             </div>
           ))}
@@ -400,13 +471,17 @@ function ActivityPane({ activity, scanning, onScan, onShare }: ActivityPaneProps
           <div style={sectionLabel}>Unshared</div>
           {activity.outgoing.length === 0 && <div style={muted}>Everything you've committed is shared.</div>}
           {activity.outgoing.map(e => (
-            <div key={e.dreamnodePath} className="vault-row">
-              <div className="vault-name" title={e.dreamnodePath}>{e.dreamnodeName}</div>
-              <div className="vault-mode">{e.commitsUnpushed} commit{e.commitsUnpushed === 1 ? '' : 's'}</div>
-              <div className="vault-actions">
-                <button className="icon-btn" onClick={() => onShare(e.dreamnodePath)} title="Push to your outbox (origin)">
-                  Share
-                </button>
+            <div
+              key={e.dreamnodePath}
+              className="vault-row"
+              style={{ cursor: 'pointer', gap: 10 }}
+              onClick={() => onOpen(e.vaultName, e.dreamnodeUuid, 'outbox')}
+              title={`Review & share unpushed commits for ${e.dreamnodeName}`}
+            >
+              <MiniNode nodeType={e.nodeType} dreamTalkPath={e.dreamTalkPath} name={e.dreamnodeName} />
+              <div className="vault-name">{e.dreamnodeName}</div>
+              <div style={countChip}>
+                {e.commitsUnpushed} commit{e.commitsUnpushed === 1 ? '' : 's'}
               </div>
             </div>
           ))}

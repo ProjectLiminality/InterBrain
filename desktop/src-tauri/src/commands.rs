@@ -475,15 +475,9 @@ pub async fn activity_scan(
     Ok(crate::activity::scan_all(state.inner().clone(), Some(&app)).await)
 }
 
-/// Activity feed: publish a DreamNode's committed-but-unpushed work
-/// (the "[Share]" button on outbox rows) — pushes the node's origin.
-#[tauri::command]
-pub fn activity_share(
-    state: tauri::State<'_, Arc<AppState>>,
-    dreamnode_path: String,
-) -> Result<(), String> {
-    crate::activity::share_node(&state, &dreamnode_path)
-}
+// NOTE: the dashboard is an overview + navigation shortcut only — feed rows
+// deep-link into Obsidian (obsidian://interbrain-activity) where the plugin
+// owns the acting flows (Check-for-Updates modal, Share-Changes modal).
 
 #[tauri::command]
 pub fn gh_status() -> crate::github::GhStatus {

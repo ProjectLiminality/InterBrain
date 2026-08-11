@@ -1,18 +1,24 @@
 //! Activity scanning: the data layer behind the dashboard's Activity tab
 //! (issue #393 — "Activity feed: inbox + outbox").
 //!
-//! Inbox: walk every registered vault's DreamNodes, fetch from each
-//! interbrain:// peer remote, and report which DreamNodes have new commits
-//! available from which peers.
+//! The dashboard is a pure OVERVIEW + navigation shortcut: rows carry no
+//! actions. Clicking a row deep-links into Obsidian (obsidian://
+//! interbrain-activity) where the node is selected and the appropriate
+//! modal opens — Check-for-Updates for incoming, Share-Changes for
+//! unshared. All acting happens in the plugin, which owns the full flows
+//! (cherry-pick, outbox creation via gh, error surfacing).
 //!
-//! Outbox: report DreamNodes whose local `main` is ahead of `origin` —
-//! committed-but-unpushed work the user can publish ("Share") from the feed.
-//! Uncommitted edits are work-in-progress, not feed material.
+//! Inbox: ONE aggregated entry per DreamNode — the total number of new
+//! peer commits across ALL peer remotes (Alice 1 + Bob 1 → "2 commits").
+//! Peer remotes are any non-origin remote: native GitHub URLs are the
+//! GitHub-transport canon; legacy interbrain:// URLs are still accepted.
 //!
-//! Scans run on a periodic schedule (see `run_scheduler`) and on demand from
-//! the dashboard. Results are cached in `AppState.activity` so the tab
-//! renders instantly from the last scan. Peer usernames encountered during a
-//! scan are upserted into the daemon's `peer_registry` — the registry is a
+//! Outbox: DreamNodes whose local `main` is ahead of `origin` —
+//! committed-but-unpushed work. Uncommitted edits are not feed material.
+//!
+//! Scans run on a periodic schedule (see `run_scheduler`) and on demand.
+//! Results are cached in `AppState.activity`. Peer usernames encountered
+//! during a scan are upserted into the daemon's `peer_registry` — a
 //! derived cache, never authoritative; per-repo git remotes remain the
 //! source of truth for who collaborates on what.
 
@@ -23,44 +29,62 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::task;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct ActivityEntry {
+pub struct IncomingEntry {
     pub vault_path: String,
+    /// Vault folder name — Obsidian's URI handler resolves vaults by name.
+    pub vault_name: String,
     pub dreamnode_path: String,
     pub dreamnode_uuid: String,
     pub dreamnode_name: String,
-    pub peer_name: String,
-    pub commits_ahead: u32,
+    /// "dream" | "dreamer" — drives the ring color on the mini-node.
+    pub node_type: String,
+    /// Absolute path to the DreamTalk media, when it exists on disk.
+    pub dream_talk_path: Option<String>,
+    /// Total new commits across all peer remotes.
+    pub total_commits: u32,
+    /// Peer remote names contributing commits.
+    pub peers: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OutboxEntry {
     pub vault_path: String,
+    pub vault_name: String,
     pub dreamnode_path: String,
     pub dreamnode_uuid: String,
     pub dreamnode_name: String,
+    pub node_type: String,
+    pub dream_talk_path: Option<String>,
     pub commits_unpushed: u32,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityScanResult {
-    pub incoming: Vec<ActivityEntry>,
+    pub incoming: Vec<IncomingEntry>,
     pub outgoing: Vec<OutboxEntry>,
     /// Unix epoch milliseconds of scan completion.
     pub scanned_at_ms: u64,
 }
 
+/// Minimal .udd fields the feed needs.
+struct NodeMeta {
+    uuid: String,
+    name: String,
+    node_type: String,
+    dream_talk: Option<String>,
+}
+
 /// Run a full scan (inbox + outbox) across every registered vault, cache the
 /// result on AppState, refresh the derived peer registry, update the tray
 /// indicator, and notify listeners. This is THE scan entry point — the
-/// scheduler, the dashboard Refresh, and the legacy proxy all come through
-/// here.
+/// scheduler and the dashboard Refresh both come through here.
 pub async fn scan_all(state: Arc<AppState>, handle: Option<&AppHandle>) -> ActivityScanResult {
     let vault_paths: Vec<PathBuf> = state
         .settings
@@ -70,6 +94,15 @@ pub async fn scan_all(state: Arc<AppState>, handle: Option<&AppHandle>) -> Activ
         .iter()
         .map(|v| PathBuf::from(&v.path))
         .collect();
+
+    // Thumbnails are served over the asset protocol; make sure every
+    // registered vault is readable there (idempotent, covers vaults added
+    // after launch).
+    if let Some(handle) = handle {
+        for vault in &vault_paths {
+            let _ = handle.asset_protocol_scope().allow_directory(vault, true);
+        }
+    }
 
     let helper_dir = std::env::current_exe()
         .ok()
@@ -157,42 +190,6 @@ pub async fn run_scheduler(state: Arc<AppState>, handle: AppHandle) {
     }
 }
 
-/// Push a DreamNode's local commits to its origin (the user's outbox repo).
-/// The "[Share]" action on outbox feed rows. Validates the path is inside a
-/// registered vault so the IPC surface can't push arbitrary repos.
-pub fn share_node(state: &AppState, dreamnode_path: &str) -> Result<(), String> {
-    let node = PathBuf::from(dreamnode_path);
-    let registered = state
-        .settings
-        .lock()
-        .unwrap()
-        .vault_registry
-        .iter()
-        .any(|v| node.starts_with(&v.path));
-    if !registered {
-        return Err("path is not inside a registered vault".into());
-    }
-    if !node.join(".udd").exists() {
-        return Err("path is not a DreamNode (no .udd)".into());
-    }
-
-    let helper_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-    let status = run_git(&node, &["push", "origin"], helper_dir.as_deref())
-        .map_err(|e| e.to_string())?;
-    if !status.success() {
-        return Err("git push origin failed".into());
-    }
-
-    // Drop the node from the cached outbox so the feed reflects the share
-    // immediately without a full rescan.
-    if let Some(cached) = state.activity.lock().unwrap().as_mut() {
-        cached.outgoing.retain(|e| e.dreamnode_path != dreamnode_path);
-    }
-    Ok(())
-}
-
 fn refresh_peer_registry(state: &AppState, handle: &AppHandle, usernames: &HashSet<String>) {
     if usernames.is_empty() {
         return;
@@ -222,7 +219,7 @@ fn refresh_peer_registry(state: &AppState, handle: &AppHandle, usernames: &HashS
 }
 
 /// Tray indicator: on platforms that support tray title text (macOS), show
-/// the number of DreamNode/peer pairs with incoming commits; clear when none.
+/// the number of DreamNodes with incoming commits; clear when none.
 /// Tooltip carries the same info everywhere.
 fn update_tray_indicator(handle: &AppHandle, result: &ActivityScanResult) {
     if let Some(tray) = handle.tray_by_id("main") {
@@ -238,14 +235,19 @@ fn update_tray_indicator(handle: &AppHandle, result: &ActivityScanResult) {
 }
 
 /// Walk one vault's DreamNodes (top-level directories with .udd) and collect
-/// inbox entries, outbox entries, and peer usernames seen on remotes.
+/// aggregated inbox entries, outbox entries, and peer usernames.
 fn scan_vault(
     vault: &Path,
     helper_dir: Option<&Path>,
-) -> (Vec<ActivityEntry>, Vec<OutboxEntry>, HashSet<String>) {
+) -> (Vec<IncomingEntry>, Vec<OutboxEntry>, HashSet<String>) {
     let mut incoming = Vec::new();
     let mut outgoing = Vec::new();
     let mut usernames = HashSet::new();
+    let vault_name = vault
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_string();
     let read = match std::fs::read_dir(vault) {
         Ok(r) => r,
         Err(_) => return (incoming, outgoing, usernames),
@@ -259,24 +261,38 @@ fn scan_vault(
         if !udd.exists() {
             continue;
         }
-        let (uuid, name) = match read_uuid_and_name(&udd) {
-            Some(p) => p,
+        let meta = match read_udd(&udd) {
+            Some(m) => m,
             None => continue,
         };
+        // DreamTalk media path, when the file actually exists.
+        let dream_talk_path = meta.dream_talk.as_ref().and_then(|rel| {
+            let p = path.join(rel);
+            if p.is_file() {
+                Some(p.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        });
 
         // Outbox: local commits origin doesn't have yet. Local, no network.
         let unpushed = commits_unpushed(&path);
         if unpushed > 0 {
             outgoing.push(OutboxEntry {
                 vault_path: vault.to_string_lossy().to_string(),
+                vault_name: vault_name.clone(),
                 dreamnode_path: path.to_string_lossy().to_string(),
-                dreamnode_uuid: uuid.clone(),
-                dreamnode_name: name.clone(),
+                dreamnode_uuid: meta.uuid.clone(),
+                dreamnode_name: meta.name.clone(),
+                node_type: meta.node_type.clone(),
+                dream_talk_path: dream_talk_path.clone(),
                 commits_unpushed: unpushed,
             });
         }
 
-        // Inbox: fetch each peer remote, count commits ahead.
+        // Inbox: fetch each peer remote, aggregate commit counts per node.
+        let mut total: u32 = 0;
+        let mut peers: Vec<String> = Vec::new();
         for (remote, peer_hint) in list_peer_remotes(&path) {
             if let Some(user) = peer_hint {
                 usernames.insert(user);
@@ -284,21 +300,29 @@ fn scan_vault(
             let _ = run_git(&path, &["fetch", &remote], helper_dir);
             let ahead = commits_ahead(&path, &remote);
             if ahead > 0 {
-                incoming.push(ActivityEntry {
-                    vault_path: vault.to_string_lossy().to_string(),
-                    dreamnode_path: path.to_string_lossy().to_string(),
-                    dreamnode_uuid: uuid.clone(),
-                    dreamnode_name: name.clone(),
-                    peer_name: remote.clone(),
-                    commits_ahead: ahead,
-                });
+                total += ahead;
+                peers.push(remote);
             }
+        }
+        if total > 0 {
+            peers.sort();
+            incoming.push(IncomingEntry {
+                vault_path: vault.to_string_lossy().to_string(),
+                vault_name: vault_name.clone(),
+                dreamnode_path: path.to_string_lossy().to_string(),
+                dreamnode_uuid: meta.uuid,
+                dreamnode_name: meta.name,
+                node_type: meta.node_type,
+                dream_talk_path,
+                total_commits: total,
+                peers,
+            });
         }
     }
     (incoming, outgoing, usernames)
 }
 
-fn read_uuid_and_name(udd_path: &Path) -> Option<(String, String)> {
+fn read_udd(udd_path: &Path) -> Option<NodeMeta> {
     let content = std::fs::read_to_string(udd_path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
     let uuid = v.get("uuid").and_then(|x| x.as_str())?.to_string();
@@ -314,13 +338,23 @@ fn read_uuid_and_name(udd_path: &Path) -> Option<(String, String)> {
                 .map(|s| s.to_string())
                 .unwrap_or_default()
         });
-    Some((uuid, name))
+    let node_type = v
+        .get("type")
+        .and_then(|x| x.as_str())
+        .unwrap_or("dream")
+        .to_string();
+    let dream_talk = v
+        .get("dreamTalk")
+        .and_then(|x| x.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    Some(NodeMeta { uuid, name, node_type, dream_talk })
 }
 
-/// List peer remotes: name + the GitHub username extracted from the
-/// `interbrain://<uuid>?peer=<hint>` URL when present. Hints may be
-/// `<owner>` or `<owner>/<repo>` (percent-encoded); the owner is the
-/// username.
+/// List peer remotes: every non-origin remote. Native GitHub URLs are the
+/// GitHub-transport canon (peer remotes named after the peer); legacy
+/// interbrain:// URLs are accepted too. Returns (remote name, extracted
+/// GitHub username when derivable).
 fn list_peer_remotes(repo: &Path) -> Vec<(String, Option<String>)> {
     let mut cmd = Command::new("git");
     cmd.arg("remote").arg("-v").current_dir(repo);
@@ -338,7 +372,7 @@ fn list_peer_remotes(repo: &Path) -> Vec<(String, Option<String>)> {
         }
         let name = parts[0];
         let url = parts[1];
-        if name == "origin" || !url.starts_with("interbrain://") {
+        if name == "origin" {
             continue;
         }
         seen.entry(name.to_string())
@@ -347,8 +381,21 @@ fn list_peer_remotes(repo: &Path) -> Vec<(String, Option<String>)> {
     seen.into_iter().collect()
 }
 
-/// Extract the peer's GitHub username from an interbrain:// remote URL.
+/// Extract the peer's GitHub username from a remote URL: the owner segment
+/// of a native github.com URL, or the ?peer= hint of a legacy interbrain://
+/// URL (hints may be `<owner>` or `<owner>/<repo>`, percent-encoded).
 fn peer_username_from_url(url: &str) -> Option<String> {
+    if let Some(rest) = url
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("http://github.com/"))
+        .or_else(|| url.strip_prefix("git@github.com:"))
+    {
+        let owner = rest.split('/').next()?.trim();
+        if !owner.is_empty() {
+            return Some(owner.to_string());
+        }
+        return None;
+    }
     let query = url.split_once('?')?.1;
     for pair in query.split('&') {
         if let Some(v) = pair.strip_prefix("peer=") {
