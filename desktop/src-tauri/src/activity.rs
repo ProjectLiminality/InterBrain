@@ -300,7 +300,13 @@ fn scan_vault(
             });
         }
 
-        // Inbox: fetch each peer remote, aggregate commit counts per node.
+        // Inbox: fetch each peer remote, aggregate PENDING commit counts per
+        // node — raw rev-list counts minus commits the user has already
+        // accepted or rejected through the cherry-pick modal (a cherry-pick
+        // re-hashes, so an accepted commit never becomes an ancestor of
+        // HEAD and would otherwise count forever). The social-resonance
+        // decisions live in <node>/collaboration-memory.json.
+        let processed = processed_commit_hashes(&path);
         let mut total: u32 = 0;
         let mut peers: Vec<String> = Vec::new();
         for (remote, peer_hint) in list_peer_remotes(&path, my_username) {
@@ -308,9 +314,9 @@ fn scan_vault(
                 usernames.insert(user);
             }
             let _ = run_git(&path, &["fetch", &remote], helper_dir);
-            let ahead = commits_ahead(&path, &remote);
-            if ahead > 0 {
-                total += ahead;
+            let pending = pending_commits(&path, &remote, &processed);
+            if pending > 0 {
+                total += pending;
                 peers.push(remote);
             }
         }
@@ -437,8 +443,51 @@ fn peer_username_from_url(url: &str) -> Option<String> {
     None
 }
 
-fn commits_ahead(repo: &Path, remote: &str) -> u32 {
-    rev_list_count(repo, &format!("HEAD..{remote}/main"))
+/// All commit hashes the user has already accepted or rejected for this
+/// node, from `<repo>/collaboration-memory.json` (the cherry-pick modal's
+/// social-resonance memory). Empty set when the file is absent/unreadable.
+fn processed_commit_hashes(repo: &Path) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Ok(content) = std::fs::read_to_string(repo.join("collaboration-memory.json")) else {
+        return out;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return out;
+    };
+    if let Some(nodes) = v.get("dreamNodes").and_then(|n| n.as_object()) {
+        for state in nodes.values() {
+            for list in ["accepted", "rejected"] {
+                if let Some(entries) = state.get(list).and_then(|a| a.as_array()) {
+                    for e in entries {
+                        if let Some(h) = e.get("originalHash").and_then(|h| h.as_str()) {
+                            out.insert(h.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Commits on the peer's main that aren't ours yet AND haven't already been
+/// accepted/rejected through the cherry-pick flow.
+fn pending_commits(
+    repo: &Path,
+    remote: &str,
+    processed: &std::collections::HashSet<String>,
+) -> u32 {
+    let spec = format!("HEAD..{remote}/main");
+    let mut cmd = Command::new("git");
+    cmd.arg("rev-list").arg(&spec).current_dir(repo);
+    suppress_console_window(&mut cmd);
+    match cmd.output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|h| !h.trim().is_empty() && !processed.contains(h.trim()))
+            .count() as u32,
+        _ => 0,
+    }
 }
 
 /// Commits on local HEAD that origin/main doesn't have. 0 when origin (or
