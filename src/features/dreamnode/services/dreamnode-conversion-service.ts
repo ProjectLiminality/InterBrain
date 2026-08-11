@@ -1251,8 +1251,8 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
       try {
         const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: submodulePath });
         const url = remoteUrl.trim();
-        // Only add back if it's a real URL (not a local path)
-        if (url && (url.startsWith('http') || url.startsWith('git@') || url.startsWith('rad://'))) {
+        // Only add back real GitHub-era URLs (never local paths or rad://)
+        if (url && (url.startsWith('http') || url.startsWith('git@'))) {
           await execAsync(`git remote add origin "${url}"`, { cwd: sovereignPath });
           console.log(`[ConvertToDreamNode] Set sovereign remote to: ${url}`);
         }
@@ -1271,8 +1271,15 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
   }
 
   /**
-   * Ensure submodule's origin remote points to the sovereign repo
-   * This allows changes in submodule to be pushed to sovereign
+   * Align the submodule's origin with the sovereign's GitHub outbox (#409).
+   *
+   * Never a filesystem path: local resolution between the submodule and its
+   * sovereign copy is owned by the interbrain://<uuid> URL in .gitmodules +
+   * the daemon's uuid index, and sovereignty silently deletes non-GitHub
+   * origins on the next Share. A path-origin also breaks nest-on-weave
+   * (#397), where the nested working copy IS the node. When the sovereign
+   * has no outbox yet, the submodule keeps no origin — the first Share
+   * creates one.
    */
   private async ensureSubmoduleRemote(
     submodulePath: string,
@@ -1280,24 +1287,39 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     submoduleName: string
   ): Promise<void> {
     try {
-      // Check current origin
+      // The sovereign's GitHub outbox, if it has one.
+      let sovereignOrigin = '';
+      try {
+        const { stdout } = await execAsync('git config remote.origin.url', { cwd: sovereignPath });
+        const url = stdout.trim();
+        if (url.startsWith('http') || url.startsWith('git@')) {
+          sovereignOrigin = url;
+        }
+      } catch {
+        // Sovereign has no origin yet.
+      }
+
       let currentOrigin = '';
       try {
-        const { stdout } = await execAsync('git remote get-url origin', { cwd: submodulePath });
+        const { stdout } = await execAsync('git config remote.origin.url', { cwd: submodulePath });
         currentOrigin = stdout.trim();
       } catch {
         // No origin set
       }
 
-      // If origin doesn't point to sovereign, update it
-      if (currentOrigin !== sovereignPath) {
+      if (sovereignOrigin && currentOrigin !== sovereignOrigin) {
         try {
           await execAsync('git remote remove origin', { cwd: submodulePath });
         } catch {
           // Origin might not exist
         }
-        await execAsync(`git remote add origin "${sovereignPath}"`, { cwd: submodulePath });
-        console.log(`[ConvertToDreamNode] Updated submodule ${submoduleName} origin to sovereign`);
+        await execAsync(`git remote add origin "${sovereignOrigin}"`, { cwd: submodulePath });
+        console.log(`[ConvertToDreamNode] Submodule ${submoduleName} origin → sovereign outbox ${sovereignOrigin}`);
+      } else if (!sovereignOrigin && currentOrigin && !currentOrigin.startsWith('http') && !currentOrigin.startsWith('git@')) {
+        // Heal a legacy filesystem-path origin: remove it rather than leave
+        // a remote sovereignty would silently destroy later.
+        await execAsync('git remote remove origin', { cwd: submodulePath });
+        console.log(`[ConvertToDreamNode] Removed legacy path origin from submodule ${submoduleName}`);
       }
     } catch (error) {
       console.warn(`[ConvertToDreamNode] Could not update submodule remote:`, error);

@@ -397,7 +397,7 @@ function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
  * contain certain characters; users with hyphens are fine, but we lowercase
  * and strip anything weird for predictability.
  */
-function sanitizePeerRemoteName(owner: string): string {
+export function sanitizePeerRemoteName(owner: string): string {
   return owner.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 }
 

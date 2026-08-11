@@ -195,4 +195,101 @@ export function registerCollaborationCommands(
       }
     }
   });
+
+  // Migrate legacy remotes (#409 Phase D) — one idempotent sweep bringing
+  // every DreamNode to the unified convention: origin = my outbox; peers =
+  // GitHub remotes owned by others; nothing else.
+  //   - `github` remote owned by me → adopted as origin (or dropped if a
+  //     correct origin already exists)
+  //   - `github` remote owned by someone else → renamed to their peer name
+  //   - `rad` remotes / rad:// URLs → removed (unresolvable)
+  //   - filesystem-path origins → removed (uuid resolution owns local links)
+  plugin.addCommand({
+    id: 'migrate-legacy-remotes',
+    name: 'Migrate Legacy Remotes (vault-wide)',
+    callback: async () => {
+      const { promisify } = require('util');
+      const { exec } = require('child_process');
+      const execAsync = promisify(exec);
+      const fs = require('fs');
+      const vaultPath = getVaultPath(plugin);
+
+      const notice = new Notice('Migrating legacy remotes…', 0);
+      let adopted = 0, peered = 0, removedRad = 0, removedPath = 0, dropped = 0, scanned = 0;
+      try {
+        const { getSovereigntyService } = await import('./services/sovereignty-service');
+        const { sanitizePeerRemoteName } = await import('./services/sovereignty-service');
+        const { ownerFromRemoteUrl } = await import('./services/peer-remotes');
+        let me: string | null = null;
+        try {
+          me = (await getSovereigntyService().getCurrentUser()).toLowerCase();
+        } catch {
+          // Without an identity we can still clean rad remotes + path origins.
+        }
+
+        for (const entry of fs.readdirSync(vaultPath, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const repo = path.join(vaultPath, entry.name);
+          if (!fs.existsSync(path.join(repo, '.udd'))) continue;
+          scanned++;
+
+          let config = '';
+          try {
+            const { stdout } = await execAsync("git config --get-regexp '^remote\\..*\\.url$'", { cwd: repo });
+            config = stdout;
+          } catch {
+            continue; // no remotes at all — first Share creates the outbox
+          }
+
+          const remotes: Array<{ name: string; url: string }> = [];
+          for (const line of config.split('\n')) {
+            const m = line.match(/^remote\.(.+)\.url\s+(\S+)$/);
+            if (m) remotes.push({ name: m[1], url: m[2] });
+          }
+
+          const hasProperOrigin = remotes.some(r =>
+            r.name === 'origin' && (r.url.startsWith('http') || r.url.startsWith('git@'))
+          );
+
+          for (const r of remotes) {
+            const isGithubUrl = /^(https?:\/\/(www\.)?github\.com\/|git@github\.com:)/i.test(r.url);
+            const isRad = r.name === 'rad' || r.url.startsWith('rad://');
+            const isPathUrl = !isGithubUrl && !isRad && !r.url.startsWith('interbrain://') && !/^[a-z+]+:\/\//i.test(r.url) && !r.url.startsWith('git@');
+
+            if (isRad) {
+              await execAsync(`git remote remove ${r.name}`, { cwd: repo }).catch(() => {});
+              removedRad++;
+            } else if (r.name === 'origin' && isPathUrl) {
+              await execAsync('git remote remove origin', { cwd: repo }).catch(() => {});
+              removedPath++;
+            } else if (r.name === 'github' && isGithubUrl) {
+              const owner = ownerFromRemoteUrl(r.url);
+              if (me && owner === me) {
+                if (hasProperOrigin) {
+                  await execAsync('git remote remove github', { cwd: repo }).catch(() => {});
+                  dropped++;
+                } else {
+                  await execAsync('git remote rename github origin', { cwd: repo }).catch(() => {});
+                  adopted++;
+                }
+              } else if (owner) {
+                const peerName = sanitizePeerRemoteName(owner);
+                await execAsync(`git remote rename github ${peerName}`, { cwd: repo }).catch(() => {});
+                peered++;
+              }
+            }
+          }
+        }
+
+        notice.hide();
+        const summary = `Migrated remotes across ${scanned} nodes: ${adopted} adopted as origin, ${peered} → peer, ${removedRad} rad removed, ${removedPath} path-origins removed, ${dropped} duplicates dropped`;
+        console.log(`[MigrateRemotes] ${summary}`);
+        new Notice(summary, 8000);
+      } catch (error) {
+        notice.hide();
+        console.error('[MigrateRemotes] Failed:', error);
+        new Notice(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  });
 }
