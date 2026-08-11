@@ -65,7 +65,7 @@ Each feature README contains: Purpose, Directory Structure, Main Exports, Comman
 | `semantic-search` | Vector embeddings and similarity search (Ollama) |
 | `conversational-copilot` | AI conversation mode with node invocation |
 | **Collaboration** | |
-| `social-resonance-filter` | Radicle P2P integration & commit propagation |
+| `social-resonance-filter` | GitHub-outbox collaboration: sovereignty, sharing, peer curation |
 | `coherence-beacon` | Automatic relationship discovery via git hooks |
 | `github-publishing` | GitHub sharing + Pages broadcast |
 | `video-calling` | Video call initiation |
@@ -86,8 +86,9 @@ Each feature README contains: Purpose, Directory Structure, Main Exports, Comman
 - **Build**: Vite (plugin) + Tauri (daemon); see *Cross-Platform Release Build*
 - **Testing**: Vitest
 - **Collaboration transport**: GitHub (HTTPS) — every peer has their own
-  GitHub repo per DreamNode ("outbox"). The retired Radicle P2P prototype
-  is preserved on `feature/webrtc-transport`.
+  GitHub repo per DreamNode ("outbox"); sharing also publishes the node
+  via GitHub Pages (#409: sharing is publishing). The retired Radicle P2P
+  prototype is preserved on `feature/webrtc-transport`.
 - **AI**: Ollama for embeddings, Claude API for summaries
 
 ## Desktop App Architecture

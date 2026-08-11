@@ -606,38 +606,6 @@ export class GitDreamNodeService {
         }
       }
 
-      // Initialize Radicle repository via RadicleService (social-resonance feature)
-      try {
-        const radicleService = serviceManager.getRadicleService();
-        const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
-        const timestamp = new Date().toISOString();
-        const description = `${nodeTypeLabel} ${timestamp}`;
-        const repoName = path.basename(repoPath);
-
-        // Get passphrase from settings
-        const settings = (this.plugin as any).settings;
-        const passphrase = settings?.radiclePassphrase;
-
-        // Call RadicleService.init() - returns RID or null
-        const radicleId = await radicleService.init(repoPath, repoName, description, passphrase);
-
-        if (radicleId) {
-          // Update .udd file with radicleId
-          const uddPath = path.join(repoPath, '.udd');
-          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-          const udd = JSON.parse(uddContent);
-          udd.radicleId = radicleId;
-          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
-
-          // Commit the radicleId update
-          await execAsync('git add .udd', { cwd: repoPath });
-          await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: repoPath });
-        }
-      } catch (radError: any) {
-        // Don't throw - allow node creation to proceed even if rad init fails
-        console.warn('GitDreamNodeService: Radicle init failed (non-fatal):', radError.message);
-      }
-
     } catch (error: any) {
       // Don't log error if repository was actually created successfully
       // (This can happen if earlier operations like git init had stderr output)
@@ -1549,46 +1517,6 @@ export class GitDreamNodeService {
       await Promise.all(updateTasks);
     }
 
-    // RADICLE SEEDING: If either node is a Dreamer, seed both nodes to the network
-    // This ensures DreamNodes are available for sharing when related to peers
-    // Seeding is idempotent (safe to run multiple times)
-    if (node.type === 'dreamer' || relatedNode.type === 'dreamer') {
-      this.triggerBackgroundSeeding(node, relatedNode);
-    }
-  }
-
-  /**
-   * Trigger background seeding for nodes involved in a peer relationship
-   * Fire-and-forget: doesn't block the relationship creation
-   */
-  private triggerBackgroundSeeding(node: DreamNode, relatedNode: DreamNode): void {
-    // Fire-and-forget async operation
-    (async () => {
-      try {
-        const radicleService = serviceManager.getRadicleService();
-        if (!await radicleService.isAvailable()) {
-          return; // Radicle not available, skip silently
-        }
-
-        // Seed both nodes if they have Radicle IDs
-        const nodesToSeed = [node, relatedNode];
-
-        for (const n of nodesToSeed) {
-          if (!n.repoPath) continue;
-
-          const absolutePath = path.join(this.vaultPath, n.repoPath);
-          const radicleId = await radicleService.getRadicleId(absolutePath);
-
-          if (radicleId) {
-            console.log(`🌐 [AddRelationship] Triggering background seeding for "${n.name}" (${radicleId})`);
-            radicleService.seedInBackground(absolutePath, radicleId);
-          }
-        }
-      } catch (error) {
-        // Non-critical: don't fail the relationship creation
-        console.warn(`⚠️ [AddRelationship] Background seeding failed (non-critical):`, error);
-      }
-    })();
   }
 
   /**

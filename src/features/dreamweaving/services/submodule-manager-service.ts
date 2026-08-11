@@ -20,7 +20,6 @@ import { GitOperationsService } from '../../dreamnode/utils/git-operations';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from '../../dreamnode/services/udd-service';
-import { RadicleService } from '../../social-resonance-filter/services/radicle-service';
 
 export interface SubmoduleInfo {
   name: string;
@@ -56,8 +55,7 @@ export class SubmoduleManagerService {
   constructor(
     private app: App,
     private vaultService: VaultService,
-    private canvasParser: CanvasParserService,
-    private radicleService: RadicleService
+    private canvasParser: CanvasParserService
   ) {
     this.gitOpsService = new GitOperationsService(app);
     this.initializeVaultPath(app);
@@ -298,9 +296,8 @@ export class SubmoduleManagerService {
   /**
    * Sync canvas submodules - complete end-to-end workflow
    */
-  async syncCanvasSubmodules(canvasPath: string, options?: { skipRadicle?: boolean }): Promise<SyncResult> {
-    const skipRadicle = options?.skipRadicle ?? false; // Default: false (Radicle enabled)
-    console.log(`SubmoduleManagerService: Starting sync for canvas ${canvasPath} (Radicle: ${skipRadicle ? 'DISABLED' : 'enabled'})`);
+  async syncCanvasSubmodules(canvasPath: string): Promise<SyncResult> {
+    console.log(`SubmoduleManagerService: Starting sync for canvas ${canvasPath}`);
 
     try {
       // Analyze canvas dependencies
@@ -320,12 +317,10 @@ export class SubmoduleManagerService {
 
       // Update bidirectional .udd relationships (submodules <-> supermodules)
       // This ALWAYS runs to ensure existing submodules have correct relationships
-      // SKIP RADICLE for local-only saves (massive performance improvement)
       await this.updateBidirectionalRelationships(
         analysis.dreamNodeBoundary,
         importResults,
-        removedSubmodules,
-        { skipRadicle }
+        removedSubmodules
       );
 
       // Early exit: If all submodules already existed AND none removed, no canvas rewrite needed.
@@ -665,10 +660,8 @@ export class SubmoduleManagerService {
     parentPath: string,
     importResults: SubmoduleImportResult[],
     removedSubmodules: string[],
-    options?: { skipRadicle?: boolean }
   ): Promise<void> {
-    const skipRadicle = options?.skipRadicle ?? false;
-    console.log(`SubmoduleManagerService: Updating bidirectional .udd relationships... (Radicle: ${skipRadicle ? 'SKIP' : 'enabled'})`);
+    console.log(`SubmoduleManagerService: Updating bidirectional .udd relationships...`);
 
     const fullParentPath = this.getFullPath(parentPath);
 

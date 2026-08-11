@@ -1,5 +1,4 @@
 import { App, Notice, Plugin } from 'obsidian';
-import { RadicleService } from '../social-resonance-filter/services/radicle-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { UDDService } from '../dreamnode/services/udd-service';
 import { DreamSongRelationshipService } from '../dreamweaving/services/dreamsong-relationship-service';
@@ -15,13 +14,11 @@ import { DreamNode } from '../dreamnode';
 export class URIHandlerService {
 	private app: App;
 	private plugin: Plugin;
-	private radicleService: RadicleService;
 	private dreamNodeService: GitDreamNodeService;
 
-	constructor(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: GitDreamNodeService) {
+	constructor(app: App, plugin: Plugin, dreamNodeService: GitDreamNodeService) {
 		this.app = app;
 		this.plugin = plugin;
-		this.radicleService = radicleService;
 		this.dreamNodeService = dreamNodeService;
 	}
 
@@ -202,9 +199,9 @@ export class URIHandlerService {
 					if (type === 'github') {
 						result = await this.cloneFromGitHub(raw, true); // silent=true
 					} else if (type === 'radicle') {
-						// Pass senderDid as peerNid for direct P2P clone
-						const cloneResult = await this.cloneFromRadicle(raw, true, senderDid);
-						result = cloneResult.status;
+						// Radicle links are retired (#409) — collaboration is GitHub-only.
+						console.warn(`⚠️ [URIHandler] Radicle link no longer supported: ${raw}`);
+						result = 'error';
 					} else {
 						console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${raw}`);
 						return { result: 'error', identifier: raw, type };
@@ -294,12 +291,6 @@ export class URIHandlerService {
 							}
 						}
 
-						// Sync Radicle peer relationships
-						try {
-							await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-						} catch {
-							// Non-critical sync failure
-						}
 					} else {
 						// Dreamer exists - DreamNode.id is already the UUID
 						(dreamerNode as any).uuid = dreamerNode.id;
@@ -317,11 +308,6 @@ export class URIHandlerService {
 						if (missingLinks) {
 							await this.dreamNodeService.scanVault();
 
-							try {
-								await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-							} catch {
-								// Non-critical
-							}
 						}
 					}
 
@@ -371,12 +357,6 @@ export class URIHandlerService {
 						}
 					}
 
-					// Sync Radicle peer relationships
-					try {
-						await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-					} catch {
-						// Non-critical sync failure
-					}
 
 					// Refresh UI with smart selection
 					try {
@@ -448,17 +428,6 @@ export class URIHandlerService {
 			await this.dreamNodeService.update(uuid, updates);
 			new Notice(`Contact updated: ${name || dreamerNode.name}'s DID received`);
 
-			// Auto-trigger sync for mutual delegation
-			try {
-				const executed = (this.plugin.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-				if (executed) {
-					new Notice('Collaboration setup complete! Syncing peer configuration...');
-				} else {
-					new Notice('Contact updated. Run "Sync Radicle Peer Following" to complete setup.');
-				}
-			} catch {
-				new Notice('Contact updated, but auto-sync failed. Run "Sync Radicle Peer Following" manually.');
-			}
 
 			// Refresh UI
 			await this.dreamNodeService.scanVault();
@@ -620,137 +589,6 @@ export class URIHandlerService {
 
 		// Already human-readable with spaces, return as-is
 		return repoName;
-	}
-
-	/**
-	 * Ensure Radicle node is running before clone operations
-	 * @returns Passphrase string, empty if node running, or null if not configured
-	 */
-	private async ensureRadicleNodeRunning(): Promise<string | null> {
-		const { PassphraseManager } = await import('../social-resonance-filter/services/passphrase-manager');
-		const { UIService } = await import('../../core/services/ui-service');
-
-		const uiService = new UIService(this.app);
-		const passphraseManager = new PassphraseManager(uiService, this.plugin);
-		const passphrase = await passphraseManager.getPassphrase();
-
-		if (passphrase === null) {
-			new Notice('Please configure your Radicle passphrase in settings and try again');
-			return null;
-		}
-
-		if (passphrase === '') {
-			return ''; // Node already running
-		}
-
-		// Ensure Radicle CLI is available before starting node
-		const isAvailable = await this.radicleService.isAvailable();
-		if (!isAvailable) {
-			throw new Error('Radicle CLI not available');
-		}
-
-		// Start node
-		try {
-			await (this.radicleService as any).startNode(passphrase);
-			new Notice('Radicle node started');
-			return passphrase;
-		} catch (error) {
-			console.error('[URIHandler] Failed to start Radicle node:', error);
-			new Notice(`Failed to start Radicle node: ${error instanceof Error ? error.message : 'Unknown error'}`);
-			throw error;
-		}
-	}
-
-	/**
-	 * Clone a DreamNode from Radicle network
-	 * Public method to allow reuse by CoherenceBeaconService and other features
-	 */
-	/**
-	 * Clone a DreamNode from Radicle network
-	 * @param radicleId The Radicle ID (RID) of the repo to clone
-	 * @param silent If true, don't show notices
-	 * @param peerNid Optional peer Node ID for direct P2P clone (bypasses routing table)
-	 */
-	public async cloneFromRadicle(radicleId: string, silent: boolean = false, peerNid?: string): Promise<{ status: 'success' | 'skipped' | 'error'; repoName?: string }> {
-		try {
-			const adapter = this.app.vault.adapter as any;
-			const vaultPath = adapter.basePath || '';
-
-			if (!vaultPath) {
-				throw new Error('Could not determine vault path');
-			}
-
-			// Ensure Radicle node is running before attempting clone
-			const passphrase = await this.ensureRadicleNodeRunning();
-			if (passphrase === null) {
-				throw new Error('Radicle node requires passphrase to start. Operation cancelled.');
-			}
-
-			if (!silent) {
-				new Notice(`Cloning from Radicle network...`, 3000);
-			}
-
-			// RadicleService.clone() handles: clone, directory rename, submodule init, .udd update
-			// Pass peerNid for direct P2P clone (--seed flag)
-			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase, peerNid);
-
-			if (cloneResult.alreadyExisted) {
-				console.log(`[URIHandler] Radicle ID ${radicleId} already exists as "${cloneResult.repoName}"`);
-				if (!silent) {
-					new Notice(`DreamNode "${cloneResult.repoName}" already cloned!`);
-					await this.autoFocusNode(cloneResult.repoName, silent);
-				}
-				return { status: 'skipped', repoName: cloneResult.repoName };
-			}
-
-			if (!silent) {
-				new Notice(`Cloned "${cloneResult.repoName}" successfully!`);
-			}
-
-			// Auto-refresh: Make the newly cloned node appear immediately
-			if (!silent) {
-				try {
-					await this.dreamNodeService.scanVault();
-					await this.indexNewNode(cloneResult.repoName);
-
-					const relationshipService = new DreamSongRelationshipService(this.plugin);
-					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
-
-					if (scanResult.success) {
-						const store = useInterBrainStore.getState();
-						store.requestNavigation({ type: 'applyLayout' });
-						setTimeout(() => this.autoFocusNode(cloneResult.repoName, silent), 100);
-					}
-				} catch {
-					// Non-critical - node was cloned successfully
-				}
-			}
-
-			return { status: 'success', repoName: cloneResult.repoName };
-
-		} catch (error) {
-			// Handle network propagation delays gracefully (SEED-RELAYED MODE)
-			// This happens when the sender hasn't announced to seeds yet,
-			// or seeds haven't propagated the repo information
-			if (error instanceof Error && error.message === 'NETWORK_PROPAGATION_DELAY') {
-				if (!silent) {
-					new Notice(
-						'DreamNode not yet available on network. The sender may need to sync their node, or network propagation is in progress. Please try again in a moment.',
-						10000
-					);
-				}
-				return { status: 'error' };
-			}
-
-			console.error(`[URIHandler] Clone failed for ${radicleId}:`, error);
-
-			if (!silent) {
-				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				new Notice(`Failed to clone: ${errorMsg}`);
-			}
-
-			return { status: 'error' };
-		}
 	}
 
 	/**
@@ -1163,8 +1001,8 @@ export class URIHandlerService {
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: GitDreamNodeService): void {
-	_uriHandlerService = new URIHandlerService(app, plugin, radicleService, dreamNodeService);
+export function initializeURIHandlerService(app: App, plugin: Plugin, dreamNodeService: GitDreamNodeService): void {
+	_uriHandlerService = new URIHandlerService(app, plugin, dreamNodeService);
 	_uriHandlerService.registerHandlers();
 }
 

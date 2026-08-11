@@ -7,7 +7,6 @@ import { SubmoduleManagerService } from '../../features/dreamweaving/services/su
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../../features/drag-and-drop';
-import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance-filter/services/radicle-service';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
 import type { Mesh } from 'three';
 import type { MutableRefObject, RefObject } from 'react';
@@ -67,7 +66,6 @@ export interface IDreamNodeService {
 export class ServiceManager {
   private dreamNodeService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
-  private radicleService: RadicleService;
   private plugin: Plugin | null = null;
   private vaultService: VaultService | null = null;
   private canvasParserService: CanvasParserService | null = null;
@@ -78,7 +76,6 @@ export class ServiceManager {
 
   constructor() {
     this.indexingService = indexingService;
-    this.radicleService = new RadicleServiceImpl();
   }
 
   /**
@@ -266,13 +263,6 @@ export class ServiceManager {
    */
   getIndexingService(): IndexingService {
     return this.indexingService;
-  }
-
-  /**
-   * Get the Radicle service
-   */
-  getRadicleService(): RadicleService {
-    return this.radicleService;
   }
 
   /**

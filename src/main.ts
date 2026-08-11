@@ -2,7 +2,6 @@ import { Plugin, TFolder, TAbstractFile, Menu, Notice } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
-import { PassphraseManager } from './features/social-resonance-filter/services/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
@@ -32,7 +31,7 @@ import { registerConversationalCopilotCommands } from './features/conversational
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
 import { DreamSongRelationshipService } from './features/dreamweaving/services/dreamsong-relationship-service';
 import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG } from './features/dreamweaving/types/relationship';
-import { registerRadicleCommands } from './features/social-resonance-filter/commands';
+import { registerCollaborationCommands } from './features/social-resonance-filter/commands';
 import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
 import { registerDreamerUpdateCommands } from './features/dreamnode-updater/dreamer-update-commands';
@@ -64,8 +63,6 @@ import { initializeAudioTrimmingService } from './features/songline/services/aud
 import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeURIHandlerService } from './features/uri-handler';
-import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
-import { getPeerSyncService } from './features/social-resonance-filter/services/peer-sync-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 import { closeIndexedDBConnection, setVaultId, gracefulShutdown, markHydrationComplete } from './core/store/indexeddb-storage';
@@ -90,7 +87,6 @@ export default class InterBrainPlugin extends Plugin {
   private uiService!: UIService;
   private gitOpsService!: GitOperationsService;
   private vaultService!: VaultService;
-  private passphraseManager!: PassphraseManager;
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
@@ -214,10 +210,8 @@ export default class InterBrainPlugin extends Plugin {
     // =========================================================================
     serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.READY, async () => {
       // Initialize essential services for URI handling
-      const radicleService = serviceManager.getRadicleService();
       const dreamNodeService = serviceManager.getActive();
-      initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
-      initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
+      initializeURIHandlerService(this.app, this, dreamNodeService as any);
       initializeGitHubBatchShareService(this, dreamNodeService as any);
 
       // Initialize error capture for bug reporting
@@ -344,9 +338,6 @@ export default class InterBrainPlugin extends Plugin {
       // These run after READY is complete - no setTimeout needed
       await this.initializeBackgroundServices();
 
-      // Radicle Peer Sync (fire-and-forget, non-blocking)
-      // Ensures liminal web relationships are synced with Radicle network
-      this.syncRadiclePeersInBackground();
 
       // DreamSong Relationship Scan with change detection:
       // Only rescan if submodule structure has changed since last scan
@@ -630,46 +621,10 @@ export default class InterBrainPlugin extends Plugin {
     // Note: DreamSong relationship scan moved to post-lifecycle (after commands are registered)
   }
 
-  /**
-   * Sync Radicle peer following in background (fire-and-forget)
-   * Ensures liminal web relationships are mirrored in Radicle network config
-   */
-  private syncRadiclePeersInBackground(): void {
-    // Fire-and-forget async operation - doesn't block lifecycle
-    (async () => {
-      try {
-        const radicleService = serviceManager.getRadicleService();
-
-        // Quick bail-out if Radicle CLI not available (Windows, or not installed)
-        if (!await radicleService.isAvailable()) {
-          return;
-        }
-
-        // Check if passphrase is configured - required for all Radicle operations
-        const passphrase = this.settings?.radiclePassphrase;
-        if (!passphrase) {
-          new Notice('Configure your Radicle passphrase in Settings → InterBrain to enable P2P collaboration');
-          return;
-        }
-
-        const vaultPath = (this.app.vault.adapter as any).basePath;
-
-        console.log('[Plugin] Starting background Radicle peer sync...');
-        const peerSyncService = getPeerSyncService(radicleService);
-        const result = await peerSyncService.syncPeerFollowing(vaultPath, passphrase);
-        console.log(`[Plugin] Radicle peer sync complete: ${result.summary}`);
-      } catch (error) {
-        // Non-critical - log and continue
-        console.warn('[Plugin] Background Radicle peer sync failed (non-critical):', error);
-      }
-    })();
-  }
-
   private initializeServices(): void {
     this.uiService = new UIService(this.app);
     this.gitOpsService = new GitOperationsService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
-    this.passphraseManager = new PassphraseManager(this.uiService, this);
     this.faceTimeService = new FaceTimeService();
 
     // Initialize dreamweaving services
@@ -677,13 +632,11 @@ export default class InterBrainPlugin extends Plugin {
     this.submoduleManagerService = new SubmoduleManagerService(
       this.app,
       this.vaultService,
-      this.canvasParserService,
-      serviceManager.getRadicleService()
+      this.canvasParserService
     );
     this.coherenceBeaconService = new CoherenceBeaconService(
       this.app,
       this.vaultService,
-      serviceManager.getRadicleService(),
       this
     );
     this.leafManagerService = new LeafManagerService(this.app);
@@ -734,8 +687,8 @@ export default class InterBrainPlugin extends Plugin {
       this.submoduleManagerService
     );
 
-    // Register Radicle commands (peer-to-peer networking)
-    registerRadicleCommands(this, this.uiService, this.passphraseManager);
+    // Register collaboration commands (GitHub outbox sharing + invites)
+    registerCollaborationCommands(this, this.uiService);
 
     // Register GitHub commands (fallback sharing and broadcasting)
     registerGitHubCommands(this, this.uiService);
@@ -883,10 +836,8 @@ export default class InterBrainPlugin extends Plugin {
 
             try {
               // Run canvas sync workflow (imports submodules, updates paths, commits)
-              // SKIP RADICLE for local-only saves (massive performance improvement)
               const syncResult = await this.submoduleManagerService.syncCanvasSubmodules(
-                dreamSongPath,
-                { skipRadicle: true } // LOCAL-ONLY: Skip Radicle initialization for fast saves
+                dreamSongPath
               );
 
               if (!syncResult.success) {
@@ -1131,35 +1082,14 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Copy share link for selected DreamNode (with optional recipient DID for delegation)
+    // Copy share link — collapsed onto the sovereignty invite (#409): one
+    // link kind, derived from the origin outbox. (The Radicle-era DID
+    // delegation prompt is gone.)
     this.addCommand({
       id: 'copy-share-link',
       name: 'Copy Share Link for Selected DreamNode',
       callback: async () => {
-        const store = useInterBrainStore.getState();
-        const currentNode = store.selectedNode;
-        if (!currentNode) {
-          this.uiService.showError('No DreamNode selected');
-          return;
-        }
-
-        try {
-          // Prompt for optional recipient DID (empty = just copy link without delegation)
-          const recipientDid = await this.uiService.promptForText(
-            'Enter recipient DID (or leave empty)',
-            'did:key:z6Mk... (optional)'
-          );
-
-          const { ShareLinkService } = await import('./features/github-publishing/services/share-link-service');
-          const shareLinkService = new ShareLinkService(this.app, this);
-
-          // Pass recipientDid if provided (will be undefined if empty string)
-          const effectiveRecipientDid = recipientDid && recipientDid.trim() !== '' ? recipientDid.trim() : undefined;
-          await shareLinkService.copyShareLink(currentNode, effectiveRecipientDid);
-        } catch (error) {
-          console.error('Failed to copy share link:', error);
-          this.uiService.showError(`Failed to copy share link: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+        (this.app as any).commands.executeCommandById('interbrain:invite-collaborators');
       }
     });
 
@@ -1248,15 +1178,6 @@ export default class InterBrainPlugin extends Plugin {
         const plugins = (this.app as any).plugins;
         await plugins.disablePlugin('interbrain');
         await plugins.enablePlugin('interbrain');
-      }
-    });
-
-    // SYNC: Radicle sync (manual, opt-in)
-    this.addCommand({
-      id: 'sync-network',
-      name: 'Sync with Radicle Network',
-      callback: async () => {
-        await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
       }
     });
 
@@ -1608,8 +1529,7 @@ export default class InterBrainPlugin extends Plugin {
               .setTitle('Convert to DreamNode')
               .setIcon('git-fork')
               .onClick(async () => {
-                const passphrase = (this as any).settings?.radiclePassphrase;
-                await convertFolderToDreamNode(this, this.uiService, file, passphrase);
+                await convertFolderToDreamNode(this, this.uiService, file);
               });
           });
         }

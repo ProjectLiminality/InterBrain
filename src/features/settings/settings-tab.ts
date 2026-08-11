@@ -45,7 +45,6 @@ export interface InterBrainSettings {
 
 	// Radicle passphrase — feature still has internal callers; daemon will
 	// eventually own this. Kept in the cache for now.
-	radiclePassphrase: string;
 
 	// Vault-scoped state the plugin owns:
 	hasLaunchedBefore: boolean;
@@ -68,7 +67,6 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	constellationPrioritizeClusters: CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS,
 	webLinkAnalyzerEnabled: false,
 	webLinkAnalyzerSetupComplete: false,
-	radiclePassphrase: '',
 	hasLaunchedBefore: false,
 	userEmail: '',
 };

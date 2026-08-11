@@ -353,64 +353,17 @@ end tell`;
 // BUILD OPERATIONS
 // ============================================================================
 
-// ============================================================================
-// RADICLE-AWARE EXECUTION
-// ============================================================================
-
 /**
- * Get environment with enhanced PATH for Radicle git-remote-rad helper.
- * This is required for any git commands that interact with rad:// remotes.
+ * Push to a git remote. Returns true if push succeeded, false if failed
+ * (non-fatal).
  */
-export function getRadicleEnhancedEnv(): Record<string, string> {
-  const process = require('process');
-  const os = require('os');
-  const homeDir = os.homedir();
-
-  const radicleGitHelperPaths = [
-    `${homeDir}/.radicle/bin`,
-    '/usr/local/bin',
-    '/opt/homebrew/bin'
-  ];
-
-  const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
-
-  return {
-    ...process.env,
-    PATH: enhancedPath
-  };
-}
-
-/**
- * Execute a git command with Radicle-enhanced PATH.
- * Use this for any git operations involving rad:// remotes.
- */
-export async function execWithRadiclePath(
-  command: string,
-  cwd: string,
-  passphrase?: string
-): Promise<{ stdout: string; stderr: string }> {
-  const env = getRadicleEnhancedEnv();
-  if (passphrase) {
-    env.RAD_PASSPHRASE = passphrase;
-  }
-
-  return execAsync(command, { cwd, env });
-}
-
-/**
- * Push to a Radicle remote with proper environment.
- * Returns true if push succeeded, false if failed (non-fatal).
- */
-export async function pushToRadicle(
+export async function pushToRemote(
   repoPath: string,
   refSpec: string = 'HEAD:main',
-  remoteName: string = 'rad'
+  remoteName: string = 'origin'
 ): Promise<boolean> {
   try {
-    await execWithRadiclePath(
-      `git push ${remoteName} ${refSpec}`,
-      repoPath
-    );
+    await execAsync(`git push ${remoteName} ${refSpec}`, { cwd: repoPath });
     return true;
   } catch (error) {
     console.warn(`[git-utils] Push to ${remoteName} failed:`, error);

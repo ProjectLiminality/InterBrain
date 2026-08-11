@@ -307,7 +307,6 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
                 const perspectiveService = getPerspectiveService();
                 const audioTrimmingService = getAudioTrimmingService();
                 const dreamNodeService = serviceManager.getActive();
-                const radicleService = serviceManager.getRadicleService();
 
                 // Check if ffmpeg is available
                 const ffmpegAvailable = await audioTrimmingService.checkFfmpegAvailable();
@@ -324,18 +323,14 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
                   // Don't fail the entire copilot exit - just skip perspective creation
                   console.log('⚠️ [Songline] Skipping perspective creation - ffmpeg not available');
                 } else {
-                  // Get my Radicle alias for filename generation
+                  // My GitHub username for filename generation (#409)
                   let myAlias = 'Me'; // Fallback
                   try {
-                    const identity = await radicleService.getIdentity();
-                    if (identity?.alias) {
-                      myAlias = identity.alias;
-                      console.log(`🎵 [Songline] Using Radicle alias: ${myAlias}`);
-                    } else {
-                      console.warn(`⚠️ [Songline] No Radicle alias found, using fallback: ${myAlias}`);
-                    }
+                    const { getSovereigntyService } = await import('../social-resonance-filter/services/sovereignty-service');
+                    myAlias = await getSovereigntyService().getCurrentUser();
+                    console.log(`🎵 [Songline] Using GitHub username: ${myAlias}`);
                   } catch {
-                    console.warn(`⚠️ [Songline] Could not get Radicle identity, using fallback: ${myAlias}`);
+                    console.warn(`⚠️ [Songline] Could not get GitHub identity, using fallback: ${myAlias}`);
                   }
 
                   // Process each clip suggestion

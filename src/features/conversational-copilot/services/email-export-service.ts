@@ -2,8 +2,6 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../uri-handler';
-import { ShareLinkService } from '../../github-publishing/services/share-link-service';
-import { serviceManager } from '../../../core/services/service-manager';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { ManualEmailModal } from '../ui/ManualEmailModal';
 // PDF generation disabled for now - keeping import for future use
@@ -52,18 +50,15 @@ export class EmailExportService {
 			const recipientDid = conversationPartner.did;
 			console.log(`👤 [EmailExport] Recipient DID: ${recipientDid || 'none'}`);
 
-			// Get sender's identity for collaboration handshake
-			const radicleService = serviceManager.getRadicleService();
+			// Sender identity = GitHub username (#409: gh is the identity layer)
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
-	
 			try {
-				const identity = await radicleService.getIdentity();
-				senderDid = identity.did;
-				senderName = identity.alias || 'Friend';
-				console.log(`👤 [EmailExport] Sender identity: ${senderName} (${senderDid})`);
+				const { getSovereigntyService } = await import('../../social-resonance-filter/services/sovereignty-service');
+				senderName = await getSovereigntyService().getCurrentUser();
+				console.log(`👤 [EmailExport] Sender identity: ${senderName}`);
 			} catch (error) {
-				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
+				console.warn('⚠️ [EmailExport] Could not get GitHub identity:', error);
 			}
 
 			// Get sender's email from settings (optional)
@@ -76,8 +71,10 @@ export class EmailExportService {
 			const dreamerUuid = conversationPartner.id;
 			console.log(`👤 [EmailExport] Peer Dreamer node UUID: ${dreamerUuid} (${conversationPartner.name})`);
 
-			// Share each invoked node and collect URIs
-			const shareLinkService = new ShareLinkService(this.app, this.plugin);
+			// Share each invoked node and collect invite links (#409: one link
+			// kind — the sovereignty invite derived from the origin outbox).
+			const { getSovereigntyService } = await import('../../social-resonance-filter/services/sovereignty-service');
+			const sovereignty = getSovereigntyService();
 			const sharedLinks: Array<{ nodeName: string; uri: string; identifier: string }> = [];
 
 			console.log(`🔗 [EmailExport] Sharing ${invocations.length} invoked nodes...`);
@@ -90,24 +87,15 @@ export class EmailExportService {
 						continue;
 					}
 
-					// Share the node (init Radicle → publish → add delegate → generate URI)
-					const { uri, identifier } = await shareLinkService.generateShareLink(nodeData.node, recipientDid);
-
+					// Ensure the node has an outbox and produce its invite link.
+					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, nodeData.node.repoPath);
+					const invite = await sovereignty.buildInvite(absoluteRepoPath, nodeData.node.name, senderName);
 					sharedLinks.push({
 						nodeName: inv.nodeName,
-						uri: uri,
-						identifier: identifier
+						uri: invite.inviteUrl,
+						identifier: invite.githubUrl
 					});
-
-					// CRITICAL: Trigger background seeding so node is discoverable via seeds
-					// This is the same step that copyShareLink() does but generateShareLink() skips
-					if (identifier.startsWith('rad:') && nodeData.node.repoPath) {
-						const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, nodeData.node.repoPath);
-						radicleService.seedInBackground(absoluteRepoPath, identifier);
-						console.log(`🌐 [EmailExport] Triggered background seeding for "${inv.nodeName}"`);
-					}
-
-					console.log(`✅ [EmailExport] Shared "${inv.nodeName}": ${identifier}`);
+					console.log(`✅ [EmailExport] Shared "${inv.nodeName}": ${invite.githubUrl}`);
 				} catch (error) {
 					console.error(`❌ [EmailExport] Failed to share "${inv.nodeName}":`, error);
 					// Continue with other nodes

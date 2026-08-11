@@ -1,9 +1,7 @@
-export { registerRadicleCommands } from './commands';
-export { RadicleService } from './services/radicle-service';
-export { getRadicleBatchInitService } from './services/batch-init-service';
-export { PassphraseManager } from './services/passphrase-manager';
+export { registerCollaborationCommands } from './commands';
 export { GitSyncService, type CommitInfo, type FetchResult } from './services/git-sync-service';
-export { getPeerSyncService, type PeerDiscoveryResult, type PeerSyncResult } from './services/peer-sync-service';
+export { getSovereigntyService } from './services/sovereignty-service';
+export { listPeerRemotes, isPeerRemote, ownerFromRemoteUrl } from './services/peer-remotes';
 export {
   type SubmoduleUpdate,
   parseGitmodules,

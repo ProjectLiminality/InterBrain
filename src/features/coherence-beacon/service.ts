@@ -17,7 +17,6 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 import { App, Plugin } from 'obsidian';
-import { RadicleService } from '../social-resonance-filter/services/radicle-service';
 import { VaultService } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { getURIHandlerService } from '../uri-handler';
@@ -28,7 +27,7 @@ import {
   fileExists
 } from '../dreamnode/utils/vault-scanner';
 import { UDDService } from '../dreamnode/services/udd-service';
-import { pushToRadicle } from '../dreamnode/utils/git-utils';
+import { pushToRemote } from '../dreamnode/utils/git-utils';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
@@ -76,7 +75,6 @@ export class CoherenceBeaconService {
   constructor(
     private app: App,
     private _vaultService: VaultService,
-    private _radicleService: RadicleService,
     plugin: Plugin
   ) {
     this.initializeVaultPath(app);
@@ -104,31 +102,35 @@ export class CoherenceBeaconService {
     const fullPath = path.join(this.vaultPath, dreamNodePath);
 
     try {
-      // Fetch from Radicle network (non-fatal if no seeds available)
-      const radCmd = await this.getRadCommand();
-      try {
-        await execAsync(`"${radCmd}" sync --fetch`, { cwd: fullPath });
-      } catch (fetchError) {
-        console.warn('[CoherenceBeacon] Fetch failed (continuing with local refs):', fetchError);
+      // GitHub-era (#409): beacons arrive as commits on peer remotes.
+      // Fetch each peer (non-fatal) and collect their new commits.
+      const { listPeerRemotes } = await import('../social-resonance-filter/services/peer-remotes');
+      const peerRemotes = await listPeerRemotes(fullPath);
+      for (const remote of peerRemotes) {
+        try {
+          await execAsync(`git fetch ${remote}`, { cwd: fullPath });
+        } catch (fetchError) {
+          console.warn(`[CoherenceBeacon] Fetch from ${remote} failed (continuing):`, fetchError);
+        }
       }
 
       // Get current HEAD commit
       const { stdout: currentHead } = await execAsync('git rev-parse HEAD', { cwd: fullPath });
       const headCommit = currentHead.trim();
 
-      // Get commits from Radicle remotes that we don't have
+      // Collect commits from peer remotes that we don't have
       let logOutput = '';
-      try {
-        const { stdout } = await execAsync(
-          `git log ${headCommit}..refs/remotes/rad/main --format="%H|%s|%b"`,
-          { cwd: fullPath }
-        );
-        logOutput = stdout;
-      } catch {
-        // No new commits or rad/main doesn't exist
-        return [];
+      for (const remote of peerRemotes) {
+        try {
+          const { stdout } = await execAsync(
+            `git log ${headCommit}..${remote}/main --format="%H|%s|%b"`,
+            { cwd: fullPath }
+          );
+          logOutput += stdout;
+        } catch {
+          // No new commits from this peer — fine.
+        }
       }
-
       if (!logOutput.trim()) {
         return [];
       }
@@ -441,14 +443,8 @@ export class CoherenceBeaconService {
         console.log('[CoherenceBeacon] Stashed uncommitted changes');
       }
 
-      // 2. Determine which remote to use (rad for Radicle, origin for GitHub)
-      let remoteName = 'origin';
-      try {
-        await execAsync('git remote get-url rad', { cwd: sovereignPath });
-        remoteName = 'rad';
-      } catch {
-        // No rad remote, try origin
-      }
+      // 2. The outbox (origin) is the one remote beacons publish through (#409).
+      const remoteName = 'origin';
 
       // Fetch latest
       try {
@@ -536,7 +532,7 @@ export class CoherenceBeaconService {
 
       // 6. Push if we have a remote (using shared Radicle-aware push utility)
       if (hasRemote) {
-        const pushSuccess = await pushToRadicle(sovereignPath, 'HEAD:main', remoteName);
+        const pushSuccess = await pushToRemote(sovereignPath, 'HEAD:main', remoteName);
         if (pushSuccess) {
           console.log(`[CoherenceBeacon] Pushed beacon commit to ${remoteName}`);
         } else {
@@ -572,25 +568,6 @@ export class CoherenceBeaconService {
   }
 
   // ===== Private Helper Methods =====
-
-  private async getRadCommand(): Promise<string> {
-    const os = require('os');
-    const path = require('path');
-
-    const homeDir = os.homedir();
-    const possiblePaths = [
-      path.join(homeDir, '.radicle', 'bin', 'rad'),
-      '/usr/local/bin/rad',
-      'rad'
-    ];
-
-    for (const radPath of possiblePaths) {
-      if (await fileExists(radPath)) {
-        return radPath;
-      }
-    }
-    return 'rad';
-  }
 
   private parseCommitsForBeacons(logOutput: string): CoherenceBeacon[] {
     const beacons: CoherenceBeacon[] = [];
@@ -631,7 +608,6 @@ export class CoherenceBeaconService {
    * Uses dreamnode/utils/vault-scanner for gitmodules parsing.
    */
   private async initializeSubmodules(clonedNodePath: string): Promise<void> {
-    const path = require('path');
 
     // Use dreamnode utility to parse gitmodules
     const submodules = await readGitmodules(clonedNodePath);
@@ -640,37 +616,13 @@ export class CoherenceBeaconService {
       return; // No submodules
     }
 
-    // Clone any missing sovereign copies (Radicle submodules only)
-    for (const submodule of submodules) {
-      if (!submodule.url.startsWith('rad://')) {
-        continue; // Skip non-Radicle submodules
-      }
-
-      const radicleId = `rad:${submodule.url.replace('rad://', '')}`;
-
-      // Check if sovereign exists at vault root
-      const vaultRootPath = path.join(this.vaultPath, submodule.name);
-      const gitPath = path.join(vaultRootPath, '.git');
-
-      if (!(await fileExists(gitPath))) {
-        // Clone missing sovereign
-        try {
-          const uriHandler = getURIHandlerService();
-          await uriHandler.cloneFromRadicle(radicleId, false);
-          // Recursively handle nested submodules
-          await this.initializeSubmodules(path.join(this.vaultPath, submodule.name));
-        } catch (cloneError) {
-          console.error(`[CoherenceBeacon] Failed to clone submodule ${submodule.name}:`, cloneError);
-        }
-      }
-    }
+    // rad:// submodule URLs are retired (#409); interbrain://<uuid> URLs
+    // resolve through git-remote-interbrain during the git-native init below.
 
     // Git-native submodule initialization
     try {
-      const os = require('os');
-      const homeDir = os.homedir();
       const nodeProcess = (globalThis as any).process;
-      const enhancedPath = `${homeDir}/.radicle/bin:/usr/local/bin:/opt/homebrew/bin:${nodeProcess?.env?.PATH || ''}`;
+      const enhancedPath = `/usr/local/bin:/opt/homebrew/bin:${nodeProcess?.env?.PATH || ''}`;
 
       await execAsync('git submodule update --init --recursive', {
         cwd: clonedNodePath,

@@ -1,10 +1,9 @@
 /**
- * Git Sync Service - P2P/Radicle synchronization operations
+ * Git Sync Service - peer synchronization over GitHub remotes
  *
  * Handles remote synchronization for DreamNode repositories:
  * - Fetch updates from peers and remotes
  * - Pull/cherry-pick from peers
- * - Push to available remotes (Radicle + GitHub)
  * - Divergence detection
  * - Read-only repository detection
  */
@@ -100,69 +99,25 @@ export class GitSyncService {
         };
       }
 
-      // Determine which remote to fetch from (avoid broken Radicle remotes if CLI not available)
-      let remoteName = 'origin'; // Default
+      // The outbox (origin) is the fetch target (#409); legacy 'github'
+      // remotes are adopted as origin by ensureOwnOutbox, and dead rad
+      // remotes are ignored entirely.
+      let remoteName = 'origin';
       const remotes = remoteOutput.trim().split('\n');
-
-      try {
-        // Try to get the upstream remote for current branch
-        const { stdout: upstreamOutput } = await execAsync('git rev-parse --abbrev-ref --symbolic-full-name @{upstream}', { cwd: fullPath });
-        const upstream = upstreamOutput.trim();
-        if (upstream && upstream !== '@{upstream}') {
-          // Extract remote name from refs/remotes/<remote>/<branch>
-          const remoteMatch = upstream.match(/^([^/]+)\//);
-          if (remoteMatch) {
-            const detectedRemote = remoteMatch[1];
-
-            // Skip 'rad' remote if Radicle CLI is not available
-            if (detectedRemote === 'rad') {
-              const { serviceManager } = await import('../../../core/services/service-manager');
-              const radicleService = serviceManager.getRadicleService();
-              const isRadicleAvailable = await radicleService.isAvailable();
-
-              if (!isRadicleAvailable) {
-                console.log(`GitSyncService: Skipping 'rad' remote - Radicle CLI not available`);
-                // Fall through to manual selection below
-              } else {
-                remoteName = detectedRemote;
-              }
-            } else {
-              remoteName = detectedRemote;
-            }
-          }
-        }
-      } catch {
-        // No upstream configured, continue to manual selection
-      }
-
-      // If we're still on 'origin' (default), try to pick a better remote
-      if (remoteName === 'origin' && !remotes.includes('origin')) {
+      if (!remotes.includes('origin')) {
         if (remotes.includes('github')) {
           remoteName = 'github';
-        } else if (remotes.length > 0) {
-          remoteName = remotes.find((r: string) => r !== 'rad') || remotes[0];
+        } else {
+          const candidate = remotes.find((r: string) => r && r !== 'rad');
+          if (!candidate) {
+            return { hasUpdates: false, commits: [], filesChanged: 0, insertions: 0, deletions: 0 };
+          }
+          remoteName = candidate;
         }
       }
 
       console.log(`GitSyncService: Fetching from remote: ${remoteName}`);
-
-      // If fetching from Radicle, enhance PATH with git-remote-rad helper
       const execOptions: any = { cwd: fullPath };
-      if (remoteName === 'rad') {
-        const homeDir = (globalThis as any).process?.env?.HOME || '';
-        const radicleGitHelperPaths = [
-          `${homeDir}/.radicle/bin`,
-          '/usr/local/bin',
-          '/opt/homebrew/bin'
-        ];
-
-        const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
-        execOptions.env = {
-          ...(globalThis as any).process.env,
-          PATH: enhancedPath
-        };
-        console.log(`GitSyncService: Enhanced PATH for Radicle fetch: ${enhancedPath}`);
-      }
 
       try {
         await execAsync(`git fetch ${remoteName}`, execOptions);
@@ -367,24 +322,9 @@ export class GitSyncService {
         isInterBrainNode = false;
       }
 
-      // Enhance PATH for Radicle git-remote-rad helper
-      const homeDir = (globalThis as any).process?.env?.HOME || '';
-      const radicleGitHelperPaths = [
-        `${homeDir}/.radicle/bin`,
-        '/usr/local/bin',
-        '/opt/homebrew/bin'
-      ];
+      const execOptions = { cwd: fullPath };
 
-      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
-      const execOptions = {
-        cwd: fullPath,
-        env: {
-          ...(globalThis as any).process.env,
-          PATH: enhancedPath
-        }
-      };
-
-      // InterBrain node: Always use simple pull (GitHub-only, no Radicle p2p)
+      // InterBrain node: Always use simple pull
       if (isInterBrainNode) {
         console.log(`GitSyncService: InterBrain node detected - using simple pull strategy`);
 
@@ -575,249 +515,4 @@ export class GitSyncService {
     }
   }
 
-  /**
-   * Detect available git remote and push to it intelligently
-   * Strategy:
-   * - If both Radicle (rad) and GitHub (github) exist: Push to BOTH
-   * - Otherwise: Priority is Radicle → GitHub → origin → first available
-   */
-  async pushToAvailableRemote(repoPath: string, radiclePassphrase?: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' | 'dual' }> {
-    const fullPath = this.getFullPath(repoPath);
-
-    try {
-      console.log(`\n🔍 [GitSyncService] ===== PUSH TO NETWORK DEBUG =====`);
-      console.log(`📂 [GitSyncService] Full path: ${fullPath}`);
-
-      // Check git status first
-      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
-      const hasUncommittedChanges = !!statusOutput.trim();
-      console.log(`📊 [GitSyncService] Git status:\n${statusOutput || '  (no changes)'}`);
-
-      // If there are uncommitted changes, commit them first
-      if (hasUncommittedChanges) {
-        console.log(`⚠️ [GitSyncService] Found uncommitted changes - committing before push...`);
-
-        // Check if any submodules have internal uncommitted changes
-        const potentialSubmoduleChanges = statusOutput
-          .split('\n')
-          .filter((line: string) => line.startsWith(' M '))
-          .map((line: string) => line.trim().substring(2).trim());
-
-        console.log(`🔍 [GitSyncService] Found ${potentialSubmoduleChanges.length} potential submodule changes: ${potentialSubmoduleChanges.join(', ')}`);
-
-        if (potentialSubmoduleChanges.length > 0) {
-          const gitmodulesPath = path.join(fullPath, '.gitmodules');
-          let submodulePaths: string[] = [];
-
-          try {
-            const fs = require('fs').promises;
-            const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
-
-            const lines = gitmodulesContent.split('\n');
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('path =')) {
-                const submodulePath = trimmed.split('=')[1].trim();
-                submodulePaths.push(submodulePath);
-              }
-            }
-
-            console.log(`📦 [GitSyncService] Submodule paths from .gitmodules: ${submodulePaths.join(', ')}`);
-          } catch {
-            console.log(`⚠️ [GitSyncService] No .gitmodules file found or couldn't read it`);
-          }
-
-          const submoduleChanges = potentialSubmoduleChanges.filter((p: string) =>
-            submodulePaths.includes(p)
-          );
-
-          console.log(`📦 [GitSyncService] Confirmed ${submoduleChanges.length} submodule(s) with internal changes: ${submoduleChanges.join(', ')}`);
-
-          if (submoduleChanges.length > 0) {
-            console.log(`📦 [GitSyncService] Processing ${submoduleChanges.length} submodule commit(s)...`);
-
-            try {
-              for (const submodulePath of submoduleChanges) {
-                const fullSubmodulePath = path.join(fullPath, submodulePath);
-
-                console.log(`📦 [GitSyncService] Committing changes in submodule: ${submodulePath}`);
-
-                await execAsync('git add -A', { cwd: fullSubmodulePath });
-
-                const timestamp = new Date().toISOString();
-                await execAsync(`git commit -m "Auto-commit submodule changes (${timestamp})"`, { cwd: fullSubmodulePath });
-
-                console.log(`✅ [GitSyncService] Submodule ${submodulePath} committed`);
-              }
-            } catch (submoduleError: any) {
-              console.warn(`⚠️ [GitSyncService] Could not process submodules: ${submoduleError.message}`);
-              console.warn(`   Continuing with parent commit...`);
-            }
-          }
-        }
-
-        // Stage all changes (including updated submodule pointers)
-        await execAsync('git add -A', { cwd: fullPath });
-
-        // Commit with fallback message
-        try {
-          const timestamp = new Date().toISOString();
-          const result = await execAsync(`git commit -m "Auto-commit before push (${timestamp})"`, { cwd: fullPath });
-          console.log(`✅ [GitSyncService] Changes committed with fallback message`);
-          console.log(`   Commit output: ${result.stdout}`);
-        } catch (commitError: any) {
-          console.error(`❌ [GitSyncService] Git commit failed:`, commitError);
-          console.error(`   stderr: ${commitError.stderr || 'none'}`);
-          console.error(`   stdout: ${commitError.stdout || 'none'}`);
-          throw new Error(`Failed to commit changes: ${commitError.message}`);
-        }
-      }
-
-      // Check current branch
-      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
-      const currentBranch = branchOutput.trim();
-      console.log(`🌿 [GitSyncService] Current branch: ${currentBranch}`);
-
-      // Get all configured remotes
-      const { stdout: remotesOutput } = await execAsync('git remote -v', { cwd: fullPath });
-      console.log(`🌐 [GitSyncService] Configured remotes:\n${remotesOutput}`);
-
-      const { stdout: remoteListOutput } = await execAsync('git remote', { cwd: fullPath });
-      const remotes = remoteListOutput.trim().split('\n').filter((r: string) => r);
-
-      if (remotes.length === 0) {
-        console.log(`⚠️ [GitSyncService] No remotes found - initializing Radicle...`);
-
-        const { serviceManager } = await import('../../../core/services/service-manager');
-        const radicleService = serviceManager.getRadicleService();
-
-        if (!await radicleService.isAvailable()) {
-          throw new Error('No git remotes configured and Radicle CLI not available. Please install Radicle or set up GitHub.');
-        }
-
-        const dirName = path.basename(fullPath);
-        console.log(`🔧 [GitSyncService] Initializing ${dirName} as Radicle repository...`);
-        await radicleService.init(fullPath, dirName, undefined, undefined);
-        console.log(`✅ [GitSyncService] Radicle initialized!`);
-
-        const { stdout: newRemoteList } = await execAsync('git remote', { cwd: fullPath });
-        remotes.length = 0;
-        remotes.push(...newRemoteList.trim().split('\n').filter((r: string) => r));
-      }
-
-      const hasRadicle = remotes.includes('rad');
-      const hasGitHub = remotes.includes('github');
-      const hasOrigin = remotes.includes('origin');
-
-      // DUAL REMOTE MODE: If both Radicle and GitHub exist, push to BOTH
-      if (hasRadicle && hasGitHub) {
-        console.log(`\n🌐 [GitSyncService] DUAL REMOTE MODE: Found both Radicle and GitHub`);
-        console.log(`📡 [GitSyncService] Strategy: Radicle (collaboration) + GitHub (publishing)`);
-
-        console.log(`\n🚀 [GitSyncService] [1/2] Pushing to Radicle...`);
-        const { serviceManager } = await import('../../../core/services/service-manager');
-        const radicleService = serviceManager.getRadicleService();
-        await radicleService.share(fullPath, radiclePassphrase);
-        console.log(`✅ [GitSyncService] Radicle sync complete!`);
-
-        console.log(`\n🚀 [GitSyncService] [2/2] Pushing to GitHub...`);
-        const { stdout: ghPushOutput, stderr: ghPushError } = await execAsync(`git push github ${currentBranch}`, { cwd: fullPath });
-        console.log(`📤 [GitSyncService] GitHub push stdout:\n${ghPushOutput || '(empty)'}`);
-        if (ghPushError) {
-          console.log(`⚠️ [GitSyncService] GitHub push stderr:\n${ghPushError}`);
-        }
-        console.log(`✅ [GitSyncService] GitHub push complete!`);
-
-        console.log(`\n🎉 [GitSyncService] DUAL PUSH COMPLETE: Radicle + GitHub`);
-        return { remote: 'rad + github', type: 'dual' };
-      }
-
-      // SINGLE REMOTE MODE: Priority-based selection
-      if (hasRadicle) {
-        console.log(`\n🚀 [GitSyncService] Found Radicle remote - using RadicleService.share()`);
-        const { serviceManager } = await import('../../../core/services/service-manager');
-        const radicleService = serviceManager.getRadicleService();
-        await radicleService.share(fullPath, radiclePassphrase);
-        console.log(`✅ [GitSyncService] Radicle sync complete!`);
-        return { remote: 'rad', type: 'radicle' };
-      }
-
-      if (hasGitHub) {
-        console.log(`\n🚀 [GitSyncService] Found GitHub remote - pushing to github ${currentBranch}`);
-        const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push github ${currentBranch}`, { cwd: fullPath });
-        console.log(`📤 [GitSyncService] Push stdout:\n${pushOutput || '(empty)'}`);
-        if (pushError) {
-          console.log(`⚠️ [GitSyncService] Push stderr:\n${pushError}`);
-        }
-        console.log(`✅ [GitSyncService] GitHub push complete!`);
-        return { remote: 'github', type: 'github' };
-      }
-
-      if (hasOrigin) {
-        try {
-          const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: fullPath });
-          const isGitHub = originUrl.includes('github.com');
-
-          console.log(`\n🚀 [GitSyncService] Found origin remote (${isGitHub ? 'GitHub' : 'other'}): ${originUrl.trim()}`);
-
-          if (isGitHub && originUrl.startsWith('https://')) {
-            console.log(`⚠️ [GitSyncService] Skipping GitHub HTTPS remote (requires authentication)`);
-            throw new Error('GitHub HTTPS remote requires authentication - skipping');
-          }
-
-          console.log(`🚀 [GitSyncService] Pushing to origin ${currentBranch}...`);
-          const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push origin ${currentBranch}`, { cwd: fullPath });
-          console.log(`📤 [GitSyncService] Push stdout:\n${pushOutput || '(empty)'}`);
-          if (pushError) {
-            console.log(`⚠️ [GitSyncService] Push stderr:\n${pushError}`);
-          }
-          console.log(`✅ [GitSyncService] Origin push complete!`);
-          return { remote: 'origin', type: isGitHub ? 'github' : 'other' };
-        } catch (error) {
-          console.error('❌ [GitSyncService] Failed to push to origin:', error);
-        }
-      }
-
-      // Fallback: Try remaining remotes in order
-      console.log(`\n🔍 [GitSyncService] Trying remaining remotes in order...`);
-
-      for (const remote of remotes) {
-        try {
-          const { stdout: remoteUrl } = await execAsync(`git remote get-url ${remote}`, { cwd: fullPath });
-          const isGitHubHttps = remoteUrl.includes('github.com') && remoteUrl.startsWith('https://');
-
-          if (isGitHubHttps) {
-            console.log(`⚠️ [GitSyncService] Skipping ${remote} (GitHub HTTPS requires auth): ${remoteUrl.trim()}`);
-            continue;
-          }
-
-          console.log(`\n🚀 [GitSyncService] Trying remote: ${remote} (${remoteUrl.trim()})`);
-          const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push ${remote} ${currentBranch}`, { cwd: fullPath });
-          console.log(`📤 [GitSyncService] Push stdout:\n${pushOutput || '(empty)'}`);
-          if (pushError) {
-            console.log(`⚠️ [GitSyncService] Push stderr:\n${pushError}`);
-          }
-          console.log(`✅ [GitSyncService] Push complete to ${remote}!`);
-
-          const isGitHub = remoteUrl.includes('github.com');
-          return { remote, type: isGitHub ? 'github' : 'other' };
-        } catch (error) {
-          console.warn(`⚠️ [GitSyncService] Failed to push to ${remote}, trying next...`, error);
-          continue;
-        }
-      }
-
-      throw new Error('No pushable remotes available (all remotes require authentication or failed)');
-
-    } catch (error) {
-      console.error('❌ [GitSyncService] Failed to push to remote:', error);
-      if (error instanceof Error) {
-        console.error('❌ [GitSyncService] Error details:', {
-          message: error.message,
-          stack: error.stack
-        });
-      }
-      throw new Error(`Failed to push changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
 }
