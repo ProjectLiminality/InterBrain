@@ -7,19 +7,20 @@
 A "coherence beacon" is metadata embedded in git commits that signals supermodule relationships:
 
 ```
-COHERENCE_BEACON: {"type":"supermodule","radicleId":"rad:z123...","title":"ParentNode","atCommit":"abc123..."}
+COHERENCE_BEACON: {"type":"supermodule","parentUuid":"550e8400-…","parentPeerRepo":"https://github.com/<owner>/<Parent>","title":"ParentNode","atCommit":"abc123..."}
 ```
 
 ### Outgoing Beacons (Share Flow)
 
 When you click "Share Changes" on a DreamNode with submodules:
 
-1. **Push** your changes to the network (Radicle/GitHub)
+1. **Push** your changes to your GitHub outbox (origin)
 2. **Ignite** beacons: For each submodule, create a beacon commit in the sovereign repo
 3. **Non-invasive push**: The beacon commit is pushed without forcing the sovereign's unpublished work
 
 The beacon commit updates the sovereign's `.udd` file with a `supermodules` entry that tracks:
-- `radicleId`: Parent DreamNode's Radicle ID
+- `parentUuid`: Parent DreamNode's UUID (persisted under the legacy
+  `radicleId` key for backward compatibility — the *value* is a UUID)
 - `title`: Parent DreamNode's display name
 - `atCommit`: The parent commit hash that included this as a submodule
 - `addedAt`: Timestamp when relationship was recorded
@@ -61,7 +62,7 @@ cherry-pick-preview-modal.ts
         ↓ • previewBeaconCommit() - clones + opens DreamSong
         ↓ • acceptSingleCommit() - clones + cherry-picks
         ↓ uses
-uri-handler (cloneFromRadicle)
+uri-handler (cloneFromGitHub)
         ↓
 cloneMissingSubmodules() - recursive submodule cloning
 ```
@@ -101,7 +102,9 @@ export { registerCoherenceBeaconCommands } from './commands';
 - Update preview/summary UI → `dreamnode-updater` (cherry-pick-preview-modal)
 - Clone operations → `uri-handler` → `social-resonance-filter`
 - Submodule auto-cloning → `cherry-pick-preview-modal.cloneMissingSubmodules()`
-- Network operations (fetch/push) → `social-resonance-filter`
+- Network operations → beacon detection fetches peer remotes directly
+  (via `social-resonance-filter`'s `listPeerRemotes` classifier); pushes go
+  through `origin`
 - Relationship persistence → `dreamnode`
 - Rejection persistence → `collaboration-memory-service`
 
@@ -136,7 +139,7 @@ The `.udd` file tracks supermodule relationships with historical context:
 {
   "supermodules": [
     {
-      "radicleId": "rad:z123...",
+      "radicleId": "550e8400-…(a UUID — legacy key name, current value)",
       "title": "ParentNode",
       "atCommit": "abc123...",
       "addedAt": 1703123456

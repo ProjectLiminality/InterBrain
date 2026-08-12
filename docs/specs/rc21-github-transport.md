@@ -1,8 +1,8 @@
 # rc.21 — The Great Simplification (GitHub as transport)
 
-Status: in progress (2026-05-13)
-Branch: `feature/desktop-companion`
-Target: ship rc.21 today
+Status: SHIPPED in v0.16.0; updated 2026-08-12 to reflect the #409
+unification (GitHub as the one collaboration AND publishing layer —
+"sharing is publishing"). Historical rc.21 framing preserved where accurate.
 
 ## What changed and why
 
@@ -19,10 +19,13 @@ The WebRTC implementation is preserved on `feature/webrtc-transport` for a futur
 | Idea identity | UUID | `.udd.uuid`, forever |
 | Peer identity | GitHub username | daemon `peer_registry`, `interbrain://` URL `?peer=` param |
 | Submodule URLs | `interbrain://<uuid>` | `.gitmodules` (no peer hint — daemon resolves locally first, then via parent-repo-origin transitivity, then peer registry) |
-| Peer remote URLs | `interbrain://<uuid>?peer=<user>/<repo>` | git config (remotes) |
+| Peer remote URLs | native `https://github.com/<owner>/<repo>` (legacy `interbrain://…?peer=` still accepted) | git config (remotes); classified by DECLARED URL owner via `peer-remotes.ts` — a peer is a GitHub remote owned by someone who isn't you |
 | Actual transport URL (invisible plumbing) | `https://github.com/<user>/<repo>` | resolved by daemon `resolve-peer-url` IPC op |
 
-**Plugin code never sees GitHub URLs.** The plugin operates on UUIDs and `interbrain://` URLs throughout. The `git-remote-interbrain` helper translates to GitHub HTTPS at the moment git invokes it, delegating actual pack-protocol transfer to git's native `git-remote-https`.
+**`.gitmodules` never contains GitHub URLs** — submodule identity stays
+`interbrain://<uuid>` (portable, transport-agnostic). Remotes, by contrast,
+are concrete local config and use native GitHub URLs; sovereignty-service
+and peer-remotes.ts handle them directly. The `git-remote-interbrain` helper translates to GitHub HTTPS at the moment git invokes it, delegating actual pack-protocol transfer to git's native `git-remote-https`.
 
 ## Sovereignty model (the outbox pattern)
 
@@ -30,7 +33,7 @@ Each peer has three distinct things per DreamNode they collaborate on:
 
 1. **Private local working copy** in their vault. Sovereign — they edit here.
 2. **Their own GitHub repo for it** (e.g., `github.com/bob/square`). Their "outbox". Tracked as `origin`. `Share Changes` = push to origin.
-3. **Knowledge of other peers' GitHub repos for the same DreamNode** (e.g., `github.com/alice/square`). Tracked as peer remotes (`interbrain://<uuid>?peer=alice/square`). Fetch-only, surfaces in the cherry-pick preview modal.
+3. **Knowledge of other peers' GitHub repos for the same DreamNode** (e.g., `github.com/alice/square`). Tracked as peer remotes named after the peer, with native GitHub URLs. Fetch-only, surfaces in the cherry-pick preview modal and the daemon's Activity feed.
 
 **The "official" version is YOUR version.** You decide what your Square is. If you don't like a commit Alice made, you don't accept it; your Square stays the way you want it.
 
@@ -44,22 +47,32 @@ Daemon orchestrates the actual flow on Invite-accept:
 git clone https://github.com/alice/square ~/vault/Square
 cd ~/vault/Square
 git remote rename origin alice   # Alice is a peer, not origin
-gh repo create bob/square --private --source=. --push
+gh repo create bob/Square --public --source=. --push   # outboxes ship public (privacy = later, by subtraction)
 # now origin = bob/square (Bob's sovereign outbox)
 # alice = alice/square (peer, fetch-only via cherry-pick)
 ```
 
 Plugin registers DreamNode in UUID index after clone completes. Bob's local Square is now sovereign with Alice as a peer remote. Done.
 
-## The two user-facing actions
+## The user-facing actions (post-#409)
 
-**Share Changes** — on a DreamNode, push current commits to your own outbox:
-- Ensure DreamNode has GitHub origin (auto-create via `gh repo create` if missing)
-- `git push origin main`
+**Share Changes** (`push-to-network`) — auto-commit, ensure the outbox
+exists (verify via `gh repo view`; create + adopt legacy remotes as
+needed), `git push origin`, ignite coherence beacons, **and publish**:
+enable/refresh GitHub Pages (DreamSong static build on `gh-pages`, or the
+rendered README from `main`). *Sharing is publishing.*
 
-**Invite Collaborators** — on a DreamNode, generate a share link:
-- Copy `https://github.com/<me>/<repo>` to clipboard
-- Friend pastes URL into "Clone DreamNode" dialog → triggers daemon's clone-accept flow above
+**Review & Share** (`preview-share`) — the outbound mirror of
+Check-for-Updates: list committed-but-unpushed commits, then Share.
+
+**Invite Collaborators** — copy an invite link to your outbox; accepting
+triggers the clone-accept flow above.
+
+**View Published Page** — open `https://<owner>.github.io/<Repo>` (derived
+from origin; replaces the retired Publish/Unpublish verb).
+
+**Migrate Legacy Remotes** — idempotent vault-wide sweep to the unified
+remote convention.
 
 ## WebRTC → GitHub substitution table
 
@@ -89,8 +102,7 @@ The plugin uses UUIDs internally. Operates on git remotes via standard `git remo
 
 What changes in the plugin:
 - **Dreamweaving service** writes `interbrain://<uuid>` submodule URLs (was: relative paths like `../<Name>`).
-- **Radicle calls** (`rad init`, `rad publish`, `rad sync`, etc.) are replaced by gh CLI equivalents or daemon-orchestrated flows. Done incrementally per-call-site, not as one big delete.
-- **Obsidian commands** that were Radicle-specific are either adapted to gh-CLI equivalents or deleted (if the underlying action only made sense in the Radicle network model).
+- **Radicle calls** — fully removed (#409 Phase C, commit 8e94011). The whole Radicle layer (services, commands, rad-init, rad remotes) is gone; collaboration commands live in `registerCollaborationCommands`.
 
 ## Daemon's new responsibilities
 
@@ -100,11 +112,19 @@ What changes in the plugin:
 - **Activity scanner** — walks all DreamNodes in all registered vaults, fetches each peer remote, counts commits ahead. Returns aggregate for the dashboard's Activity tab.
 - **Peer registry** — `{github_username, name}` entries. `add-peer` / `list-peers` IPC ops already exist.
 
-## Dashboard's new shape
+## Dashboard's shape (as shipped, #393)
 
-Tabs: **Activity** (default) | **Settings**
+Tabs: **Vaults | Activity | Settings** (Vaults has an inline "+ Add vault"
+picker; the guided Setup flow remains for new-vault creation).
 
-**Activity tab**: "Scan for updates" button, last-scan timestamp, list of entries `{dreamnodeName, peerName, commitsAhead}`. Click entry → opens vault in Obsidian, plugin selects DreamNode by UUID and opens cherry-pick preview modal.
+**Activity tab**: pure overview + navigation shortcut. ONE aggregated row
+per DreamNode (total pending commits across all peers, minus commits
+already accepted/rejected via the collaboration memory), rendered as mini
+DreamNodes (DreamTalk thumbnail, blue/red ring). Incoming + Unshared
+sections; periodic background scans + manual Refresh + tray count badge.
+Click row → `obsidian://interbrain-activity?vault&uuid&mode` → the plugin
+selects the node and opens the cherry-pick preview (inbox) or the
+Share-Changes modal (outbox).
 
 **Settings tab**: Vaults section moves here from its own tab. Then existing sections (GitHub auth, coding agent, AI provider, etc.).
 
@@ -115,7 +135,7 @@ Critical: the dashboard activity-scan and the plugin's per-DreamNode check-for-u
 Validate end-to-end on Mac (Alice) + Windows (Bob). PNG dreamtalks already exist at `/Users/davidrug/InterBrainDemo/`.
 
 1. Alice creates Square DreamNode with Square.png.
-2. Alice clicks Share Changes → daemon creates `github.com/projectliminality/<shortname>` private repo, pushes.
+2. Alice clicks Share Changes → outbox created under Alice's OWN account (`github.com/<alice>/<PascalName>`, public), pushed. *(Original draft said a projectliminality-org private repo — the shipped model is sovereign per-user public outboxes.)*
 3. Alice clicks Invite Collaborators → copies GitHub URL.
 4. Bob (Windows) pastes URL into Clone DreamNode dialog → daemon does rename-origin dance, Square appears in Bob's vault.
 5. Repeat for Circle.
@@ -142,55 +162,19 @@ All 14 pass → rc.21 ships.
 
 `npm run build:daemon` runs `tauri build --no-bundle` for production-cfg builds. Plain `cargo build` produces dev-cfg binaries that load the dashboard from `localhost:1420` instead of the bundled `dist/` — root cause of the "blank tray window" issue we chased earlier. Always use the npm script.
 
-## Dry-run blocker report (2026-05-13)
+## Dry-run blocker report (2026-05-13) — ALL RESOLVED
 
-Static trace of the 14-step demo path against current code on `feature/desktop-companion`. Three blockers found, all in the recipient (Bob) side of the flow.
+Historical record; every blocker was fixed before or with the v0.16 ship:
 
-### B1 — Plugin doesn't put `git-remote-interbrain` on PATH
+- **B1 (helper PATH)** → `src/features/desktop-bridge/helper-path-sync.ts`
+  prepends the daemon's helper dir to the plugin's PATH.
+- **B2 (recursive submodule init)** → `uri-handler-service` runs
+  `git submodule update --init --recursive` on clone-accept.
+- **B3 (stale `.udd.githubRepoUrl`)** → clone no longer writes it; the
+  `origin` remote is the source of truth for "shared" (#409 retired the
+  field's authority entirely).
 
-The plugin invokes git in many places (e.g. `git submodule update --init --recursive` in `dreamweaving/commands.ts:416,525`, `coherence-beacon/service.ts:589`, `dreamnode-conversion-service.ts:956,971`). None of these enhance PATH to include the daemon install dir. Any git operation that touches an `interbrain://` URL will fail with "fatal: Unable to find remote helper for 'interbrain'".
-
-The daemon's `activity.rs:188` does PATH enhancement for its own scan — that pattern needs to be lifted into a shared plugin-side helper and applied at every git invocation site (or, simpler, the plugin asks the daemon for the helper dir once at startup and prepends it to `process.env.PATH` for the whole Electron process).
-
-**Severity:** blocks demo step 9 (Bob recursive-clones Cylinder + submodules) and any later submodule fetch.
-
-### B2 — `cloneFromGitHub` doesn't init submodules
-
-`uri-handler-service.ts:658` runs `githubService.clone()` which is plain `git clone --single-branch`. After it returns, no `git submodule update --init --recursive`. Cylinder arrives with empty `Square/` and `Circle/` directories.
-
-**Severity:** blocks demo step 9.
-
-**Fix:** add `git submodule update --init --recursive` (with B1's PATH fix in place) right after the clone succeeds, before the .udd-create branch.
-
-### B3 — `cloneFromGitHub` writes stale `githubRepoUrl`
-
-`uri-handler-service.ts:676` writes `udd.githubRepoUrl = githubUrl` — that's the SENDER's repo URL, persisted into Bob's local .udd. Misleads UI ("Already shared!") and would break supermodule-transitivity if any code path keys off it. Worse: the existing `publish-dreamnode-github` command at `github-publishing/commands.ts:451` will short-circuit if it sees a non-empty `githubRepoUrl` and never offer to create Bob's own outbox.
-
-**Severity:** subtle but corrupting. Self-heals on first Share Changes because `SovereigntyService.ensureOwnOutbox` ignores `.udd` and goes by git remote, but the stale `.udd` field will linger.
-
-**Fix:** don't write `githubRepoUrl` in the clone path at all. SovereigntyService is the authority on what origin points to; reading `.udd` for this is wrong.
-
-### What's already clean
-
-- DreamNode creation (step 1): no Radicle dependency. `RadicleService.isAvailable()` is hardcoded `false`, so all `rad init` calls in `git-dreamnode-service.ts` are inert.
-- Share Changes (steps 2, 7, 10): handled by `SovereigntyService`. Auto-commits, ensures own outbox, pushes.
-- Invite Collaborators (steps 3, 8): copies `obsidian://interbrain-clone?ids=github.com/...` to clipboard.
-- `fetchUpdates` (step 11): prefers `origin`/`github` over `rad`, gracefully skips rad if CLI absent. Works as-is.
-- `.gitmodules` writing (step 6): submodule-manager-service.ts:173 writes `interbrain://<uuid>` correctly.
-
-### Order of fixes for ship
-
-1. B1 first (PATH for helper) — unblocks B2's fix and all submodule-touching operations.
-2. B2 (recursive init after clone) — small additive change.
-3. B3 (drop stale `githubRepoUrl` write) — small subtractive change.
-
-After all three, redo the static trace; if clean, do live Mac↔Windows run.
-
-## Compaction-resilient pointers
-
-- Current uncommitted work in working tree: FirstRun GitHubIdentityStep + obsidian:// vault-name fix (commit before doing more).
-- Task list in this session has tasks #46, #47, #56, #61, #65–#75 covering the full ship plan.
-- WebRTC work preserved at `feature/webrtc-transport` (commits up to and including `21fb631`).
-- Demo content + reset script at `/Users/davidrug/InterBrainDemo/`.
-- Mac install at `/Applications/InterBrain.app/`. Windows install at `%LOCALAPPDATA%\InterBrain\`.
-- SSH alias `win` for Windows iteration (David@192.168.1.96).
+Post-ship hardening (#409 Phase A): `ensureOwnOutbox` verifies the repo
+exists before trusting an origin URL, adopts legacy `github` remotes, and
+peer remotes are classified by declared URL owner
+(`social-resonance-filter/services/peer-remotes.ts`).

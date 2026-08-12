@@ -175,7 +175,6 @@ All limits reset on plugin reload.
 
 **Never included in reports**:
 - `claudeApiKey` - redacted from state
-- `radiclePassphrase` - redacted from state
 - Absolute file paths - only vault-relative paths
 - User email - not collected
 

@@ -45,7 +45,6 @@ dreamnode-updater/
 - **Network operations** -> `social-resonance-filter` (fetch, pull, push)
 - **Submodule sync logic** -> `social-resonance-filter` (detection, update execution)
 - **Coherence beacon parsing** -> `coherence-beacon` (relationship discovery)
-- **Radicle CLI** -> `social-resonance-filter` (P2P plumbing)
 
 ## Main Exports
 

@@ -653,7 +653,7 @@ This is abstracted away - the orchestrator just says "go home" and each node han
 1. Verify center node is type Dream (Dreamers cannot be in holarchy)
 2. Read supermodules from center node's UDD file
 3. Resolve supermodule identifiers to node IDs:
-   - Primary: match by radicleId (canonical)
+   - Primary: match by parentUuid (canonical; legacy entries fall back to the radicleId key)
    - Fallback: match by UUID (legacy, acceptable for now)
    - ~~Last resort: match by name~~ (removed - too fragile)
 4. Order supermodules by activity (same unified system as liminal web)
@@ -838,7 +838,7 @@ This is abstracted away - the orchestrator just says "go home" and each node han
 
 **Persisted (in UDD file):**
 - Type: `'Dream' | 'Dreamer'`
-- radicleId: canonical identifier for resolution
+- parentUuid: canonical identifier for resolution (radicleId = legacy fallback key)
 
 **Transient (in memory/store, not persisted):**
 - Anchor position: for persistent nodes, their star position on constellation sphere

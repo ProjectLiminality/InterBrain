@@ -38,16 +38,18 @@ export * from './radial-button-config'; // RADIAL_BUTTON_CONFIGS, RadialButtonCo
 
 ## Current Button Set
 
-1. **Edit Mode** / InterBrain Settings (gear icon)
-2. **Video Call** - Initiate/Extinguish Digital Campfire (flame icon, dreamer-type only)
+1. **Edit Metadata** (pencil icon) and **Edit Relationships** (link icon) — two separate configs
+2. **Video Call** - Initiate Digital Campfire (flame icon, dreamer-type only)
 3. **Create Canvas** - DreamSong canvas creation (grid icon)
-4. **GitHub Share** - Publish/Unpublish to GitHub (GitHub icon, dream-type only)
+4. **View Published Page** - opens the node's GitHub Pages site (GitHub icon; "View on GitHub" for the InterBrain node) — the Publish/Unpublish verb dissolved into Share (#409)
 5. **Save Changes** (save icon)
-6. **Share Changes** - Push to network (upload cloud icon, disabled for follow-only GitHub repos)
-7. **Check Updates** - Pull updates or check all from dreamer (refresh icon)
-8. **Open Finder** (folder icon)
-9. **Coding Agent** - Open terminal (terminal icon)
-10. **Delete Node** (trash icon)
+6. **Share Changes** - push origin + republish Pages (upload cloud icon, disabled for follow-only GitHub repos)
+7. **Invite Collaborators** - copy an invite link to your outbox (link icon)
+8. **Check Updates** - opens the cherry-pick preview (refresh icon)
+9. **Open Finder** (folder icon)
+10. **Coding Agent** - Open terminal (terminal icon)
+11. **Report Bug** (InterBrain node only)
+12. **Delete Node** (trash icon)
 
 ## Notes
 

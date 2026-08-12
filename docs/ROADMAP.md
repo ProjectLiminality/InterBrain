@@ -45,6 +45,13 @@ which remote got clobbered. Likely a focused one-line guard fix.
 **User workaround**: `git remote set-url origin https://github.com/<you>/<repo>`
 in the affected DreamNode dir.
 
+**Re-verify after #409 (2026-08-12):** Phase A/D reworked exactly the
+suspect surface — `ensureOwnOutbox` now verifies the repo exists before
+trusting an origin URL (and restores origin if creation fails), adopts
+legacy `github` remotes, and peer classification is by declared URL owner.
+The failure mode described above may already be fixed; reproduce before
+acting on the old diagnosis.
+
 ### Cloned DreamNode not auto-linked to sender Dreamer in liminal web *(2026-05-13)*
 
 When you accept an invite, both the cloned DreamNode and the sender's
@@ -93,20 +100,6 @@ whenever convenient — none of it blocks anything:
 
 ## Planned Features
 
-### Activity tab in the daemon dashboard
-
-A dashboard view that scans every DreamNode across all registered vaults,
-fetches each peer remote, and surfaces "what your peers have shared" in
-one place — instead of clicking Check-for-Updates per node. The scanner
-backend exists (`desktop/src-tauri/src/activity.rs`, ported from the
-webrtc branch); the dashboard UI is the missing piece.
-
-### Unify "Check for Updates" with the Activity scanner
-
-Once the Activity tab exists, the per-DreamNode radial "Check for Updates"
-button and the dashboard's activity scan should share one cherry-pick
-modal — single code path, two entry points.
-
 ### Private-by-default DreamNodes
 
 Outboxes are created public for now (simplest for the first ship). Next
@@ -119,14 +112,6 @@ The CI Release build already produces `.deb` + `.AppImage` Linux
 artifacts. They need the same Mac↔Windows shakedown the other two
 platforms got before Linux is announced as supported.
 
-### Finish stripping Radicle
-
-Most Radicle code is inert dead code post-pivot (`RadicleService.isAvailable()`
-hardcoded `false`). A focused pass to delete each call site cleanly —
-file:line map in
-[development/operational-context.md §7](./development/operational-context.md).
-Also audit Obsidian commands for Radicle-specific ones to adapt or remove.
-
 ### Tray icon duplication
 
 The colored tray icon shipped, but the duplicate-icon glitch may still
@@ -137,7 +122,7 @@ interaction.
 ### Revive the P2P collaboration E2E workflow
 
 `.github/workflows-disabled/p2p-collaboration.yml.bak` is the Radicle-era
-end-to-end test, parked because every `rad` call is now dead. The job
+end-to-end test, parked because every `rad` call has been removed. The job
 *structure* (single-runner localhost mode, two-peer fixtures) is still a
 good skeleton — rewrite the transport calls against GitHub
 (`gh repo create`, `git clone`/`fetch` over HTTPS, the sovereignty

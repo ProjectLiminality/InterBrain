@@ -330,56 +330,18 @@ Implementation lives in `desktop/src-tauri/src/vaults.rs` (functions `obsidian_r
 
 ---
 
-## 7. Incremental Radicle strip — file:line replacement map
+## 7. Radicle strip — COMPLETED (#409 Phase C, 2026-08-12)
 
-The plugin still has Radicle call-sites scattered through `src/features/social-resonance-filter/` and a handful of dependent features. **Line numbers below verified against the working tree on 2026-05-13** (the transcript's original "~100/~110" approximations were off by 50+ lines; corrected here).
-
-**`src/features/social-resonance-filter/services/radicle-service.ts`** — primary surface area, ~1500 lines:
-
-| Line | Symbol | Radicle call | gh-CLI / daemon replacement | Notes |
-|---|---|---|---|---|
-| 196 | `isAvailable()` | Detect rad binary | **Hardcoded `false`** already — all rad calls below are inert no-ops | Comment at 199: "Radicle integration retired in v0.16; WebRTC replaces it" (now: GitHub replaces WebRTC). Means most of this file is dead code that can be deleted, not migrated. |
-| 307–341 | `rad init` block | Create Radicle project | `gh repo create <user>/<name> --private --source=. --push` (already implemented in `SovereigntyService.createOutbox`) | Delete this whole block. |
-| 410, 448, 484, 578 | guards before various ops | `if (!await isAvailable()) return …` | Delete the entire functions these guard | Many of these are zombie code paths since isAvailable is hardcoded false. |
-| 767 | `share()` | `rad sync` / `rad push` | `git push origin <branch>` (already in `SovereigntyService.shareChanges`) | Delete. |
-| 1370 | `addPeerRemote(dreamNodePath, peerName, _radicleId, peerDID)` | Set up a Radicle peer remote | `git remote add <peer> https://github.com/<peer>/<repo>`; URL form `interbrain://<uuid>?peer=<owner>/<repo>` accepted by helper | The semantic ("track peer as fetch-only remote") is exactly what `SovereigntyService.ensureOwnOutbox`'s rename branch does. |
-| 1468 | `reconcileRemotes()` | Walk submodules, reconcile rad peer remotes with registry | Walk `.gitmodules` + each repo's remotes; ensure peer remotes match daemon's peer registry; remove dead ones | Daemon now owns peer registry as source of truth. |
-
-**`src/features/social-resonance-filter/services/peer-sync-service.ts`** — many references throughout:
-
-| Line | Reference | Migration |
-|---|---|---|
-| 32 | `radicleId?: string` field in PeerSyncResult | Remove field; use UUID + GitHub username instead |
-| 68, 71–72 | `private radicleService: RadicleService` | Remove dependency; inject SovereigntyService instead |
-| 152 | `radicleId: node.udd.radicleId` | Drop |
-| 216, 221 | `if (!data.radicleId) continue` / `getSeeders` | Replace seeder discovery with peer-registry iteration |
-| 309–361 | dense block: `getRadicleId`, `share`, `followPeer`, `addDelegate`, `setSeedingScope` | All inert (isAvailable=false). Most likely the whole function is dead — re-derive in pure-GitHub terms |
-| 386 | `getRadicleId(repoPath, passphrase)` | Drop |
-
-**`src/features/coherence-beacon/service.ts`** — beacon commits reference `radicleId`:
-
-| Line | Reference | Migration |
-|---|---|---|
-| 20 | `import { RadicleService }` | Drop |
-| 35, 48 | `radicleId: string` in beacon types | Replace with `parentUuid` / `peerOwner` |
-| 69 | `private _radicleService: RadicleService` ctor param | Drop |
-| 156, 251 | Beacon commits emit `radicleId` JSON | Update to UUID-based schema |
-| 183 | Commit-message parser scans for `COHERENCE_BEACON: {"type":"supermodule","radicleId":"..."}` | Update regex/JSON parser |
-| 194 | `uriHandler.cloneFromRadicle(beacon.radicleId, false)` | Switch to `cloneFromGitHub` path |
-| 203 | UI string `Radicle ID: ${beacon.radicleId}` | Update copy |
-| 279 | `const parentRadicleId = parentUDD.radicleId` | Use `parentUDD.uuid` |
-
-**`src/features/uri-handler/uri-handler-service.ts`** (related, called by coherence-beacon) — `cloneFromRadicle` at line 539. **Already in §B1–B3 of the rc21 dry-run report**; the Bob-side clone-accept path needs B1 (helper on PATH), B2 (recursive submodule init), B3 (drop stale githubRepoUrl write) fixes before it's demo-ready.
-
-**Patterns to delete entirely (no replacement):**
-- `passphraseManager` and `PassphraseManager` import/wiring — Radicle passphrase concept gone. Already removed from settings tab; remove the remaining call-sites.
-- Anywhere starting / stopping `rad node` — daemon does not manage a node process anymore.
-- The Radicle install path in `install.sh` (Tauri daemon's first-run flow has replaced the whole shell installer).
-- `DiscoveredIdentity`, `FreshIdentityResult`, `IdentityChoice` types — see §9.
-
-**Sanity check before editing:** every `radicleService.X()` call site is inert because `isAvailable()` is hardcoded `false`. So the strip is mostly *deletion* (dead code), not *migration*. The only places that need real replacement are: coherence-beacon's commit format, the URI handler's `cloneFromRadicle` (which is the Bob-side clone-accept and DOES still get exercised when senderDid is set in the clone link), and any UI copy that says "Radicle".
-
----
+The incremental replacement map that used to live here is obsolete: the
+Radicle layer was deleted wholesale (radicle-service, peer-sync-service,
+batch-init-service, passphrase-manager, share-link-service, the five
+radicle commands, rad-init in node creation, and every rad-remote branch).
+`registerRadicleCommands` became `registerCollaborationCommands`; peer
+remotes are classified by declared GitHub URL owner
+(`social-resonance-filter/services/peer-remotes.ts`). The rc21 dry-run
+blockers (B1 PATH sync, B2 recursive submodule init, B3 stale
+`.udd.githubRepoUrl`) were all resolved before the purge. See issue #409
+and commit 8e94011 for the full record.
 
 ## 8. Submodule URL migration — `interbrain://<uuid>` mechanics
 

@@ -22,7 +22,7 @@ This document maps all async operations, their triggers, initialization order, a
 | `initializeErrorCapture()` | After store ready | <1ms | None |
 | `initializeServices()` → `serviceManager.initialize()` | Sync | <1ms | Triggers vault scan |
 | `initializeMediaLoadingService()` | After services | <1ms | None |
-| URI/Radicle/GitHub batch init | After services | 1-5ms | None |
+| URI/GitHub batch init | After services | 1-5ms | None |
 | `initializeBackgroundServices()` | setTimeout(100ms) | Deferred | None |
 | View registration | Sync | <1ms | None |
 | Command registration | Sync | <1ms | None |
@@ -55,7 +55,6 @@ This document maps all async operations, their triggers, initialization order, a
 |-----------|---------|------|-----------|
 | Store reload target UUID | Immediate | <1ms | None |
 | `clean-dangling-relationships` | **AWAIT** | 200-400ms | None |
-| `sync-radicle-peer-following` | **FIRE AND FORGET** | Variable | None |
 | `indexingService.ensureAllIndexed()` | **AWAIT** | 17s for 167 nodes | **CRITICAL** |
 | Wait for IndexedDB settle | setTimeout(1000ms) | 1s | **ARBITRARY DELAY** |
 | `closeIndexedDBConnection()` | Sync | <1ms | None |
@@ -98,7 +97,6 @@ T=0ms     Cmd+R pressed
 T=1ms     Store reload target UUID
 T=2ms     clean-dangling-relationships STARTS (await)
 T=200ms   clean-dangling-relationships COMPLETES
-T=201ms   sync-radicle-peer-following (fire-and-forget)
 T=202ms   ensureAllIndexed() STARTS
 T=17200ms ensureAllIndexed() COMPLETES (17 seconds!)
 T=17201ms Wait for IndexedDB (1 second)

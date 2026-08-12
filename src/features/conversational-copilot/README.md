@@ -53,9 +53,8 @@ conversational-copilot/
 - Clip filename generation
 - Perspective service (CRUD operations)
 
-**To `social-resonance` feature:**
-- Radicle identity operations
-- Share link generation
+**To `social-resonance-filter` feature:**
+- GitHub identity (gh username) + invite generation (sovereignty-service `buildInvite`)
 
 ## Data Flow
 
@@ -85,7 +84,7 @@ conversational-copilot/
 │ 1. Stop Python transcription (realtime-transcription)           │
 │ 2. Generate AI summary + clip suggestions (this feature)        │
 │ 3. Create PDF with DreamNode images (this feature)              │
-│ 4. Generate share links (social-resonance)                      │
+│ 4. Generate invite links (sovereignty-service buildInvite)             │
 │ 5. Open Apple Mail draft (this feature)                         │
 │ 6. Create perspectives from clip suggestions (songline)         │
 │ 7. Persist bidirectional relationships (this feature)           │
@@ -131,14 +130,11 @@ getPDFGeneratorService()            // PDF document generation
 
 ## Prerequisites
 
-### Radicle Authentication
-Email export requires Radicle authentication for share link generation:
+### GitHub Authentication
+Email export requires the GitHub CLI to be signed in (it derives your
+identity and creates outbox invites):
 ```bash
-rad auth
-```
-This registers your SSH key with ssh-agent. Without this, the email export will fail with:
-```
-error: radicle key is not registered; run `rad auth` to register it with ssh-agent
+gh auth login
 ```
 
 ### Python Environment

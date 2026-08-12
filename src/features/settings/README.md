@@ -16,8 +16,6 @@ Feature Slice              → Settings Section
 semantic-search            → createSemanticSearchSettingsSection()
 realtime-transcription     → createTranscriptionSettingsSection()
 web-link-analyzer          → createWebLinkAnalyzerSettingsSection()
-social-resonance-filter    → createRadicleSettingsSection()
-github-publishing          → createGitHubSettingsSection()
 ```
 
 ## Key Files

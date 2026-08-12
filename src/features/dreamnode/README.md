@@ -149,7 +149,6 @@ export { registerDreamNodeCommands } from './commands';
 ## Notes
 
 - **Media loading**: Handled directly by `useContentTexture` hook (simplified in v0.14.0)
-- **Radicle failures**: Don't block node creation (graceful degradation)
 - **Legacy `git-operations.ts`**: Deprecated, use `gitUtils` namespace
 - **⚠️ Creator Mode**: DEPRECATED - The `creatorMode` state in the store slice is leftover from an early UX experiment and will be removed in a future update. Do not build new features on this pattern.
 

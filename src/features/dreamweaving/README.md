@@ -92,7 +92,7 @@ export { parseCanvasToBlocks, parseAndResolveCanvas, resolveMediaPaths, ... } fr
 
 ### Git Submodule Management
 1. **Dependency Detection**: Parse canvas for external DreamNode references
-2. **Submodule Import**: Add referenced DreamNodes as git submodules via Radicle URLs
+2. **Submodule Import**: Add referenced DreamNodes as git submodules via interbrain://<uuid> URLs
 3. **Bidirectional Tracking**: Update parent's `submodules` and child's `supermodules` in .udd files
 4. **Coherence Beacons**: Commit metadata for network-based relationship discovery
 
@@ -148,7 +148,6 @@ Zustand state slice for:
 - **dreamnode**: Provides UDD service, git operations
 - **constellation-layout**: Consumes relationship graph for visualization
 - **songline**: Provides perspective/conversation components
-- **social-resonance**: Provides RadicleService for submodule URLs
 - **drag-and-drop**: Provides .link file parsing utilities
 
 ## .link File Rendering Pipeline

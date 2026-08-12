@@ -158,9 +158,9 @@ export { registerDreamNodeCommands } from './commands';
 | [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High |
 | [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium |
 | **Collaboration** | | |
-| [social-resonance-filter](./social-resonance-filter/README.md) | Radicle P2P integration & commit propagation | Medium |
+| [social-resonance-filter](./social-resonance-filter/README.md) | GitHub-outbox collaboration: sovereignty, sharing, peer curation | Medium |
 | [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium |
-| [github-publishing](./github-publishing/README.md) | GitHub sharing + Pages broadcast | Medium |
+| [github-publishing](./github-publishing/README.md) | GitHub Pages build & broadcast pipeline | Medium |
 | [video-calling](./video-calling/README.md) | Video call initiation (FaceTime, future: more) | Low |
 | **UI & System** | | |
 | [action-buttons](./action-buttons/README.md) | Action menu around nodes | Low |

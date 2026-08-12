@@ -51,6 +51,7 @@ social-resonance-filter/
 | `preview-share` | Review committed-but-unpushed commits before sharing |
 | `invite-collaborators` | Copy an invite link to your outbox |
 | `view-published-page` | Open the node's GitHub Pages site |
+| `migrate-legacy-remotes` | Idempotent vault-wide sweep to the unified remote convention |
 
 ## Dependencies
 
