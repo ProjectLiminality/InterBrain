@@ -5,6 +5,74 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0-rc.1] - 2026-08-19 - The Activity Feed & GitHub Unification
+
+### Overview
+
+The first milestone on the road to public beta — hardening the collaboration
+infrastructure — moves past its halfway point. The desktop app gains an
+Activity feed showing everything flowing through your vaults; GitHub becomes
+the one unified layer for identity, collaboration, AND publishing ("sharing
+is publishing"); and the last of the Radicle-era machinery is retired.
+Release-candidate status: feature-complete and validated on macOS; the
+Windows/two-machine validation pass is still pending.
+
+### Added
+
+- **Activity feed** (#393): the daemon scans every registered vault on a
+  schedule — incoming peer commits (aggregated per DreamNode, filtered by
+  your accept/reject history) and committed-but-unpushed work. The dashboard
+  renders entries as miniature DreamNodes (DreamTalk thumbnail, blue/red
+  ring); clicking deep-links into Obsidian via `obsidian://interbrain-activity`,
+  opening the cherry-pick preview (inbox) or the new Share-Changes modal
+  (outbox). Tray count badge on incoming activity.
+- **Share-Changes modal** (`interbrain:preview-share`): the outbound mirror
+  of Check-for-Updates — review unpushed commits before publishing.
+- **"+ Add vault"** in the dashboard's Vaults tab — register another
+  Obsidian vault without the full Setup flow.
+- **One identity** (#392): `githubUsername` is the single dreamer identity;
+  the editor's four contact fields (email/phone/DID/Radicle ID) are replaced
+  by one GitHub-username field. Legacy fields remain readable and preserved.
+- **`interbrain:migrate-legacy-remotes`**: idempotent vault-wide sweep to
+  the unified remote convention.
+- **`interbrain:view-published-page`**: opens a node's GitHub Pages site
+  (replaces the Publish/Unpublish verb on the radial menu).
+
+### Changed
+
+- **Sharing is publishing** (#409): Share Changes now also publishes —
+  GitHub Pages is enabled on the outbox automatically (DreamSong static
+  site on gh-pages when a canvas exists, rendered README otherwise). The
+  separate publish flow is gone; repo creation lives solely in the
+  sovereignty service with one PascalCase naming convention.
+- **Peer classification**: a peer remote is a GitHub remote owned by
+  someone who isn't you, judged by the *declared* URL — legacy `github`
+  remotes pointing at your own repos no longer masquerade as peers, and
+  `ensureOwnOutbox` adopts them as `origin` (verifying the repo actually
+  exists before trusting any origin URL).
+- The tray window now behaves as a true macOS menu-bar popover (Accessory
+  activation policy: floats over fullscreen Spaces, ignored by tiling
+  managers, no Dock icon).
+
+### Removed
+
+- **The Radicle layer, entirely** (~2,500 lines): radicle-service,
+  peer-sync, batch-init, passphrase manager, the broken share-link service,
+  five dead commands, rad-init in node creation, and every rad-remote
+  branch. The WebRTC/Radicle prototype remains archived on
+  `feature/webrtc-transport`.
+
+### Fixed
+
+- `.md`/file opening is resilient and never silent (case-insensitive vault
+  lookup rescue, surfaced OS-open errors) (#403).
+- Layout undo/redo no longer hijacks the editor's Mod+Z — scoped to the
+  DreamSpace view (#404).
+- Feed counts respect the social-resonance memory: accepted/rejected peer
+  commits no longer show as pending forever.
+- Conversion service no longer writes filesystem-path origins (prerequisite
+  for nest-on-weave).
+
 ## [0.16.0] - 2026-05-14 - The Desktop App & Full Windows Support
 
 ### Overview

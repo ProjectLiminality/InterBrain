@@ -1912,7 +1912,7 @@ dependencies = [
 
 [[package]]
 name = "interbrain-desktop"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
